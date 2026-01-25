@@ -27,7 +27,7 @@ import {
  * Values exceeding this limit will be truncated to prevent
  * overwhelming the LLM context window.
  */
-const DEFAULT_MAX_VALUE_SIZE = 5000 * 1024; // 5000KB
+const DEFAULT_MAX_VALUE_SIZE = 2 * 1024; // 5KB
 
 /**
  * Truncates a string value if it exceeds the maximum size.
