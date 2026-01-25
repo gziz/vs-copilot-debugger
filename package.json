@@ -1,0 +1,480 @@
+{
+  "name": "copilot-debug",
+  "displayName": "Copilot Debug",
+  "description": "Exposes Python debug state to AI coding agents (Copilot, Claude Code) via debug tools",
+  "version": "0.1.0",
+  "publisher": "debug-mcp",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "enabledApiProposals": [],
+  "contributes": {
+    "languageModelTools": [
+      {
+        "name": "debug_start_session",
+        "displayName": "Start Debug Session",
+        "toolReferenceName": "startDebug",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Start a new Python debug session",
+        "modelDescription": "Create a debug session and start debugging a Python script. Returns the session ID needed for other debug operations.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-start)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "script": {
+              "type": "string",
+              "description": "Path to the Python script to debug"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Arguments to pass to the script"
+            },
+            "stopOnEntry": {
+              "type": "boolean",
+              "description": "Stop on first line (default: true)"
+            },
+            "justMyCode": {
+              "type": "boolean",
+              "description": "Debug only user code (default: true)"
+            },
+            "pythonPath": {
+              "type": "string",
+              "description": "Path to Python executable (optional, auto-detected if not provided)"
+            },
+            "name": {
+              "type": "string",
+              "description": "Optional session name"
+            }
+          },
+          "required": [
+            "script"
+          ]
+        }
+      },
+      {
+        "name": "debug_stop_session",
+        "displayName": "Stop Debug Session",
+        "toolReferenceName": "stopDebug",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Stop a debug session",
+        "modelDescription": "Stop and close a debug session",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-stop)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Session ID to stop"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        }
+      },
+      {
+        "name": "debug_list_sessions",
+        "displayName": "List Debug Sessions",
+        "toolReferenceName": "listDebugSessions",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "List all active debug sessions",
+        "modelDescription": "List all active debug sessions. Returns session IDs and their status.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(list-unordered)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      },
+      {
+        "name": "debug_set_breakpoint",
+        "displayName": "Set Breakpoint",
+        "toolReferenceName": "setBreakpoint",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Set a breakpoint at a line in a file",
+        "modelDescription": "Set a breakpoint at a specific line in a source file. Can optionally set a condition.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-breakpoint)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path to the source file"
+            },
+            "line": {
+              "type": "number",
+              "description": "Line number"
+            },
+            "condition": {
+              "type": "string",
+              "description": "Optional condition expression"
+            }
+          },
+          "required": [
+            "file",
+            "line"
+          ]
+        }
+      },
+      {
+        "name": "debug_remove_breakpoint",
+        "displayName": "Remove Breakpoint",
+        "toolReferenceName": "removeBreakpoint",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Remove a breakpoint",
+        "modelDescription": "Remove a breakpoint by its ID",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-breakpoint-disabled)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "breakpointId": {
+              "type": "string",
+              "description": "Breakpoint ID to remove"
+            }
+          },
+          "required": [
+            "breakpointId"
+          ]
+        }
+      },
+      {
+        "name": "debug_continue",
+        "displayName": "Continue Execution",
+        "toolReferenceName": "continueDebug",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Continue program execution",
+        "modelDescription": "Continue execution until next breakpoint or program end",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-continue)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Debug session ID"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        }
+      },
+      {
+        "name": "debug_step_over",
+        "displayName": "Step Over",
+        "toolReferenceName": "stepOver",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Step over to the next line",
+        "modelDescription": "Step over the current line without entering function calls",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-step-over)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Debug session ID"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        }
+      },
+      {
+        "name": "debug_step_into",
+        "displayName": "Step Into",
+        "toolReferenceName": "stepInto",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Step into a function call",
+        "modelDescription": "Step into the next function call",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-step-into)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Debug session ID"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        }
+      },
+      {
+        "name": "debug_step_out",
+        "displayName": "Step Out",
+        "toolReferenceName": "stepOut",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Step out of the current function",
+        "modelDescription": "Step out and return to the caller function",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-step-out)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Debug session ID"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        }
+      },
+      {
+        "name": "debug_get_stack_trace",
+        "displayName": "Get Stack Trace",
+        "toolReferenceName": "getStackTrace",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Get the current call stack",
+        "modelDescription": "Get the current stack trace showing the call hierarchy and source locations",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-stackframe)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Debug session ID"
+            },
+            "includeInternals": {
+              "type": "boolean",
+              "description": "Include internal frames (default: false)"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        }
+      },
+      {
+        "name": "debug_get_scopes",
+        "displayName": "Get Scopes",
+        "toolReferenceName": "getScopes",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Get variable scopes in a stack frame",
+        "modelDescription": "Get variable scopes (locals, globals, etc.) for a specific stack frame",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(symbol-namespace)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Debug session ID"
+            },
+            "frameId": {
+              "type": "number",
+              "description": "Stack frame ID from get_stack_trace"
+            }
+          },
+          "required": [
+            "sessionId",
+            "frameId"
+          ]
+        }
+      },
+      {
+        "name": "debug_get_variables",
+        "displayName": "Get Variables",
+        "toolReferenceName": "getVariables",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Get variables in a scope",
+        "modelDescription": "Get variable names, types, and values in a specific scope",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(symbol-variable)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Debug session ID"
+            },
+            "variablesReference": {
+              "type": "number",
+              "description": "Variables reference from scope or variable"
+            }
+          },
+          "required": [
+            "sessionId",
+            "variablesReference"
+          ]
+        }
+      },
+      {
+        "name": "debug_get_threads",
+        "displayName": "Get Threads",
+        "toolReferenceName": "getThreads",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Get all threads in the debug session",
+        "modelDescription": "Get all threads and their states in the debug session",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(list-tree)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Debug session ID"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        }
+      },
+      {
+        "name": "debug_evaluate",
+        "displayName": "Evaluate Expression",
+        "toolReferenceName": "evaluate",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "userDescription": "Evaluate an expression in the debug context",
+        "modelDescription": "Evaluate a Python expression in the current debug context and return the result",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-console)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Debug session ID"
+            },
+            "expression": {
+              "type": "string",
+              "description": "Expression to evaluate"
+            },
+            "frameId": {
+              "type": "number",
+              "description": "Optional stack frame ID"
+            }
+          },
+          "required": [
+            "sessionId",
+            "expression"
+          ]
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command": "debugMcp.startServer",
+        "title": "Debug MCP: Start MCP Server"
+      },
+      {
+        "command": "debugMcp.stopServer",
+        "title": "Debug MCP: Stop MCP Server"
+      },
+      {
+        "command": "debugMcp.showStatus",
+        "title": "Debug MCP: Show Status"
+      }
+    ],
+    "configuration": {
+      "title": "Debug MCP",
+      "properties": {
+        "debugMcp.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically start the MCP server when VS Code starts"
+        },
+        "debugMcp.logLevel": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "default": "info",
+          "description": "Log level for Debug MCP extension"
+        },
+        "debugMcp.serverPort": {
+          "type": "number",
+          "default": 0,
+          "description": "Port for the MCP server (0 = auto-assign)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.95.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/vsce": "^3.7.1",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

@@ -1,0 +1,775 @@
+/**
+ * Debug Bridge - Wraps VS Code's debug API for MCP tools
+ */
+
+import * as vscode from 'vscode';
+import * as path from 'path';
+import {
+  SessionInfo,
+  LaunchOptions,
+  AttachOptions,
+  BreakpointInfo,
+  ThreadInfo,
+  StackFrameInfo,
+  ScopeInfo,
+  VariableInfo,
+  EvalResult,
+  Logger,
+  DAPThreadsResponse,
+  DAPStackTraceResponse,
+  DAPScopesResponse,
+  DAPVariablesResponse,
+  DAPEvaluateResponse,
+} from './types';
+
+/**
+ * Default maximum size for variable values in bytes.
+ * Values exceeding this limit will be truncated to prevent
+ * overwhelming the LLM context window.
+ */
+const DEFAULT_MAX_VALUE_SIZE = 5000 * 1024; // 5000KB
+
+/**
+ * Truncates a string value if it exceeds the maximum size.
+ * @param value The value to potentially truncate
+ * @param maxSize Maximum allowed size in characters
+ * @returns The original or truncated value with metadata
+ */
+function truncateValue(value: string, maxSize: number = DEFAULT_MAX_VALUE_SIZE): string {
+  if (value.length <= maxSize) {
+    return value;
+  }
+  
+  const truncated = value.substring(0, maxSize);
+  const originalSize = value.length;
+  const truncatedMsg = `\n... [TRUNCATED: Value is ${originalSize.toLocaleString()} chars, showing first ${maxSize.toLocaleString()}. Use debug_evaluate with specific queries like '.head()', '.describe()', or slice notation to explore large data.]`;
+  
+  return truncated + truncatedMsg;
+}
+
+/**
+ * Default logger that uses VS Code output channel
+ */
+class DefaultLogger implements Logger {
+  private outputChannel: vscode.OutputChannel;
+  private level: 'debug' | 'info' | 'warn' | 'error' = 'info';
+
+  private readonly levelPriority = {
+    debug: 0,
+    info: 1,
+    warn: 2,
+    error: 3,
+  };
+
+  constructor() {
+    this.outputChannel = vscode.window.createOutputChannel('Debug MCP');
+  }
+
+  setLevel(level: 'debug' | 'info' | 'warn' | 'error') {
+    this.level = level;
+  }
+
+  private shouldLog(level: 'debug' | 'info' | 'warn' | 'error'): boolean {
+    return this.levelPriority[level] >= this.levelPriority[this.level];
+  }
+
+  private formatMessage(level: string, message: string, args: unknown[]): string {
+    const timestamp = new Date().toISOString();
+    const formattedArgs = args.length > 0 ? ' ' + args.map(a => JSON.stringify(a)).join(' ') : '';
+    return `[${timestamp}] [${level.toUpperCase()}] ${message}${formattedArgs}`;
+  }
+
+  debug(message: string, ...args: unknown[]): void {
+    if (this.shouldLog('debug')) {
+      this.outputChannel.appendLine(this.formatMessage('debug', message, args));
+    }
+  }
+
+  info(message: string, ...args: unknown[]): void {
+    if (this.shouldLog('info')) {
+      this.outputChannel.appendLine(this.formatMessage('info', message, args));
+    }
+  }
+
+  warn(message: string, ...args: unknown[]): void {
+    if (this.shouldLog('warn')) {
+      this.outputChannel.appendLine(this.formatMessage('warn', message, args));
+    }
+  }
+
+  error(message: string, ...args: unknown[]): void {
+    if (this.shouldLog('error')) {
+      this.outputChannel.appendLine(this.formatMessage('error', message, args));
+    }
+  }
+
+  show() {
+    this.outputChannel.show();
+  }
+
+  dispose() {
+    this.outputChannel.dispose();
+  }
+}
+
+/**
+ * Maps internal breakpoint IDs to VS Code breakpoint objects
+ */
+interface BreakpointMapping {
+  id: string;
+  vscodeBreakpoint: vscode.SourceBreakpoint;
+  file: string;
+  line: number;
+}
+
+/**
+ * Debug Bridge class - wraps VS Code's debug API
+ */
+export class DebugBridge {
+  private logger: DefaultLogger;
+  private breakpointMappings: Map<string, BreakpointMapping> = new Map();
+  private breakpointCounter = 0;
+  private sessionStoppedThreads: Map<string, Map<number, string>> = new Map();
+  private disposables: vscode.Disposable[] = [];
+
+  constructor() {
+    this.logger = new DefaultLogger();
+    this.setupEventListeners();
+  }
+
+  /**
+   * Set up VS Code debug event listeners
+   */
+  private setupEventListeners() {
+    // Track stopped threads for each session
+    this.disposables.push(
+      vscode.debug.onDidReceiveDebugSessionCustomEvent((event) => {
+        if (event.event === 'stopped') {
+          const sessionId = event.session.id;
+          if (!this.sessionStoppedThreads.has(sessionId)) {
+            this.sessionStoppedThreads.set(sessionId, new Map());
+          }
+          const threadId = event.body?.threadId as number;
+          const reason = event.body?.reason as string;
+          if (threadId !== undefined) {
+            this.sessionStoppedThreads.get(sessionId)!.set(threadId, reason);
+          }
+          this.logger.debug(`Thread ${threadId} stopped: ${reason}`, { sessionId });
+        } else if (event.event === 'continued') {
+          const sessionId = event.session.id;
+          const threadId = event.body?.threadId as number;
+          if (threadId !== undefined && this.sessionStoppedThreads.has(sessionId)) {
+            this.sessionStoppedThreads.get(sessionId)!.delete(threadId);
+          }
+        }
+      })
+    );
+
+    // Clean up session tracking on termination
+    this.disposables.push(
+      vscode.debug.onDidTerminateDebugSession((session) => {
+        this.sessionStoppedThreads.delete(session.id);
+        this.logger.info(`Debug session terminated: ${session.name}`, { sessionId: session.id });
+      })
+    );
+
+    // Log session start
+    this.disposables.push(
+      vscode.debug.onDidStartDebugSession((session) => {
+        this.logger.info(`Debug session started: ${session.name}`, { sessionId: session.id });
+      })
+    );
+
+    // Track breakpoint changes
+    this.disposables.push(
+      vscode.debug.onDidChangeBreakpoints((event) => {
+        this.logger.debug('Breakpoints changed', {
+          added: event.added.length,
+          removed: event.removed.length,
+          changed: event.changed.length,
+        });
+      })
+    );
+  }
+
+  /**
+   * Set the log level
+   */
+  setLogLevel(level: 'debug' | 'info' | 'warn' | 'error') {
+    this.logger.setLevel(level);
+  }
+
+  /**
+   * Show the output channel
+   */
+  showOutput() {
+    this.logger.show();
+  }
+
+  // ==================== Session Management ====================
+
+  /**
+   * Start a new debug session for a Python script
+   */
+  async startSession(options: LaunchOptions): Promise<SessionInfo> {
+    this.logger.info('Starting debug session', { script: options.program });
+
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+    const config: vscode.DebugConfiguration = {
+      type: 'debugpy',
+      request: 'launch',
+      name: options.name || `Debug: ${path.basename(options.program)}`,
+      program: options.program,
+      args: options.args || [],
+      cwd: options.cwd || (workspaceFolder?.uri.fsPath) || path.dirname(options.program),
+      env: options.env || {},
+      stopOnEntry: options.stopOnEntry ?? true,
+      justMyCode: options.justMyCode ?? true,
+      console: 'integratedTerminal',
+    };
+
+    if (options.pythonPath) {
+      config.python = options.pythonPath;
+    }
+
+    const started = await vscode.debug.startDebugging(workspaceFolder, config);
+
+    if (!started) {
+      throw new Error('Failed to start debug session');
+    }
+
+    // Wait for session to be available
+    await this.waitForSession();
+
+    const session = vscode.debug.activeDebugSession;
+    if (!session) {
+      throw new Error('Debug session started but not found');
+    }
+
+    return this.getSessionInfo(session);
+  }
+
+  /**
+   * Attach to a running debugpy process
+   */
+  async attach(options: AttachOptions): Promise<SessionInfo> {
+    this.logger.info('Attaching to debug session', { host: options.host, port: options.port });
+
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+    const config: vscode.DebugConfiguration = {
+      type: 'debugpy',
+      request: 'attach',
+      name: options.name || `Attach: ${options.host || 'localhost'}:${options.port}`,
+      connect: {
+        host: options.host || 'localhost',
+        port: options.port,
+      },
+      pathMappings: options.pathMappings || [],
+    };
+
+    const started = await vscode.debug.startDebugging(workspaceFolder, config);
+
+    if (!started) {
+      throw new Error('Failed to attach to debug session');
+    }
+
+    await this.waitForSession();
+
+    const session = vscode.debug.activeDebugSession;
+    if (!session) {
+      throw new Error('Attached but session not found');
+    }
+
+    return this.getSessionInfo(session);
+  }
+
+  /**
+   * Stop a debug session
+   */
+  async stopSession(sessionId: string): Promise<void> {
+    this.logger.info('Stopping debug session', { sessionId });
+
+    const session = this.findSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    await vscode.debug.stopDebugging(session);
+  }
+
+  /**
+   * List all active debug sessions
+   */
+  listSessions(): SessionInfo[] {
+    // VS Code doesn't have a direct API for listing all sessions,
+    // but we can get the active session and any child sessions
+    const sessions: SessionInfo[] = [];
+
+    // Get active session
+    const activeSession = vscode.debug.activeDebugSession;
+    if (activeSession) {
+      sessions.push(this.getSessionInfo(activeSession));
+    }
+
+    this.logger.debug('Listing sessions', { count: sessions.length });
+    return sessions;
+  }
+
+  // ==================== Breakpoints ====================
+
+  /**
+   * Set a breakpoint
+   */
+  async setBreakpoint(
+    file: string,
+    line: number,
+    condition?: string,
+    hitCondition?: string,
+    logMessage?: string
+  ): Promise<BreakpointInfo> {
+    this.logger.info('Setting breakpoint', { file, line, condition });
+
+    const uri = vscode.Uri.file(file);
+    const location = new vscode.Location(uri, new vscode.Position(line - 1, 0));
+
+    const breakpoint = new vscode.SourceBreakpoint(
+      location,
+      true,
+      condition,
+      hitCondition,
+      logMessage
+    );
+
+    vscode.debug.addBreakpoints([breakpoint]);
+
+    // Generate internal ID and store mapping
+    const id = `bp_${++this.breakpointCounter}`;
+    this.breakpointMappings.set(id, {
+      id,
+      vscodeBreakpoint: breakpoint,
+      file,
+      line,
+    });
+
+    return {
+      id,
+      verified: true, // VS Code will verify asynchronously
+      file,
+      line,
+      condition,
+      hitCondition,
+      logMessage,
+      enabled: true,
+    };
+  }
+
+  /**
+   * Remove a breakpoint
+   */
+  async removeBreakpoint(breakpointId: string): Promise<void> {
+    this.logger.info('Removing breakpoint', { breakpointId });
+
+    const mapping = this.breakpointMappings.get(breakpointId);
+    if (!mapping) {
+      throw new Error(`Breakpoint not found: ${breakpointId}`);
+    }
+
+    vscode.debug.removeBreakpoints([mapping.vscodeBreakpoint]);
+    this.breakpointMappings.delete(breakpointId);
+  }
+
+  /**
+   * List all breakpoints
+   */
+  listBreakpoints(): BreakpointInfo[] {
+    const breakpoints: BreakpointInfo[] = [];
+
+    for (const bp of vscode.debug.breakpoints) {
+      if (bp instanceof vscode.SourceBreakpoint) {
+        // Find our mapping for this breakpoint
+        let id: string | undefined;
+        for (const [mappingId, mapping] of this.breakpointMappings) {
+          if (mapping.vscodeBreakpoint === bp) {
+            id = mappingId;
+            break;
+          }
+        }
+
+        // If no mapping exists, create one
+        if (!id) {
+          id = `bp_${++this.breakpointCounter}`;
+          this.breakpointMappings.set(id, {
+            id,
+            vscodeBreakpoint: bp,
+            file: bp.location.uri.fsPath,
+            line: bp.location.range.start.line + 1,
+          });
+        }
+
+        breakpoints.push({
+          id,
+          verified: true,
+          file: bp.location.uri.fsPath,
+          line: bp.location.range.start.line + 1,
+          column: bp.location.range.start.character + 1,
+          condition: bp.condition,
+          hitCondition: bp.hitCondition,
+          logMessage: bp.logMessage,
+          enabled: bp.enabled,
+        });
+      }
+    }
+
+    this.logger.debug('Listing breakpoints', { count: breakpoints.length });
+    return breakpoints;
+  }
+
+  // ==================== Execution Control ====================
+
+  /**
+   * Continue execution
+   */
+  async continue(sessionId: string, threadId?: number): Promise<void> {
+    this.logger.info('Continuing execution', { sessionId, threadId });
+
+    const session = this.findSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const tid = threadId ?? await this.getDefaultThreadId(session);
+    await session.customRequest('continue', { threadId: tid });
+  }
+
+  /**
+   * Pause execution
+   */
+  async pause(sessionId: string, threadId?: number): Promise<void> {
+    this.logger.info('Pausing execution', { sessionId, threadId });
+
+    const session = this.findSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const tid = threadId ?? await this.getDefaultThreadId(session);
+    await session.customRequest('pause', { threadId: tid });
+  }
+
+  /**
+   * Step into
+   */
+  async stepInto(sessionId: string, threadId?: number): Promise<void> {
+    this.logger.info('Step into', { sessionId, threadId });
+
+    const session = this.findSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const tid = threadId ?? await this.getStoppedThreadId(session);
+    await session.customRequest('stepIn', { threadId: tid });
+  }
+
+  /**
+   * Step over
+   */
+  async stepOver(sessionId: string, threadId?: number): Promise<void> {
+    this.logger.info('Step over', { sessionId, threadId });
+
+    const session = this.findSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const tid = threadId ?? await this.getStoppedThreadId(session);
+    await session.customRequest('next', { threadId: tid });
+  }
+
+  /**
+   * Step out
+   */
+  async stepOut(sessionId: string, threadId?: number): Promise<void> {
+    this.logger.info('Step out', { sessionId, threadId });
+
+    const session = this.findSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const tid = threadId ?? await this.getStoppedThreadId(session);
+    await session.customRequest('stepOut', { threadId: tid });
+  }
+
+  // ==================== Inspection ====================
+
+  /**
+   * Get all threads
+   */
+  async getThreads(sessionId: string): Promise<ThreadInfo[]> {
+    this.logger.debug('Getting threads', { sessionId });
+
+    const session = this.findSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const response = await session.customRequest('threads') as DAPThreadsResponse;
+    const stoppedThreads = this.sessionStoppedThreads.get(sessionId) || new Map();
+
+    return response.threads.map((thread) => ({
+      id: thread.id,
+      name: thread.name,
+      stopped: stoppedThreads.has(thread.id),
+      reason: stoppedThreads.get(thread.id),
+    }));
+  }
+
+  /**
+   * Get stack trace
+   */
+  async getStackTrace(
+    sessionId: string,
+    threadId?: number,
+    startFrame?: number,
+    levels?: number
+  ): Promise<StackFrameInfo[]> {
+    this.logger.debug('Getting stack trace', { sessionId, threadId });
+
+    const session = this.findSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const tid = threadId ?? await this.getStoppedThreadId(session);
+
+    const response = await session.customRequest('stackTrace', {
+      threadId: tid,
+      startFrame: startFrame || 0,
+      levels: levels || 20,
+    }) as DAPStackTraceResponse;
+
+    return response.stackFrames.map((frame) => ({
+      id: frame.id,
+      name: frame.name,
+      source: frame.source,
+      line: frame.line,
+      column: frame.column,
+      endLine: frame.endLine,
+      endColumn: frame.endColumn,
+      moduleId: frame.moduleId,
+      presentationHint: frame.presentationHint,
+    }));
+  }
+
+  /**
+   * Get variable scopes for a stack frame
+   */
+  async getScopes(sessionId: string, frameId: number): Promise<ScopeInfo[]> {
+    this.logger.debug('Getting scopes', { sessionId, frameId });
+
+    const session = this.findSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const response = await session.customRequest('scopes', {
+      frameId,
+    }) as DAPScopesResponse;
+
+    return response.scopes.map((scope) => ({
+      name: scope.name,
+      variablesReference: scope.variablesReference,
+      namedVariables: scope.namedVariables,
+      indexedVariables: scope.indexedVariables,
+      expensive: scope.expensive,
+      source: scope.source,
+      line: scope.line,
+      column: scope.column,
+      endLine: scope.endLine,
+      endColumn: scope.endColumn,
+    }));
+  }
+
+  /**
+   * Get variables in a scope
+   */
+  async getVariables(
+    sessionId: string,
+    variablesReference: number,
+    filter?: 'indexed' | 'named',
+    start?: number,
+    count?: number
+  ): Promise<VariableInfo[]> {
+    this.logger.debug('Getting variables', { sessionId, variablesReference });
+
+    const session = this.findSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const args: Record<string, unknown> = { variablesReference };
+    if (filter) args.filter = filter;
+    if (start !== undefined) args.start = start;
+    if (count !== undefined) args.count = count;
+
+    const response = await session.customRequest('variables', args) as DAPVariablesResponse;
+
+    return response.variables.map((variable) => ({
+      name: variable.name,
+      value: truncateValue(variable.value),
+      type: variable.type,
+      variablesReference: variable.variablesReference,
+      namedVariables: variable.namedVariables,
+      indexedVariables: variable.indexedVariables,
+      evaluateName: variable.evaluateName,
+      memoryReference: variable.memoryReference,
+      presentationHint: variable.presentationHint,
+    }));
+  }
+
+  /**
+   * Evaluate an expression
+   */
+  async evaluate(
+    sessionId: string,
+    expression: string,
+    frameId?: number,
+    context?: 'watch' | 'repl' | 'hover' | 'clipboard'
+  ): Promise<EvalResult> {
+    this.logger.debug('Evaluating expression', { sessionId, expression, frameId });
+
+    const session = this.findSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const args: Record<string, unknown> = {
+      expression,
+      context: context || 'repl',
+    };
+    if (frameId !== undefined) {
+      args.frameId = frameId;
+    }
+
+    const response = await session.customRequest('evaluate', args) as DAPEvaluateResponse;
+
+    return {
+      result: truncateValue(response.result),
+      type: response.type,
+      variablesReference: response.variablesReference,
+      namedVariables: response.namedVariables,
+      indexedVariables: response.indexedVariables,
+      memoryReference: response.memoryReference,
+    };
+  }
+
+  /**
+   * Set a variable value
+   */
+  async setVariable(
+    sessionId: string,
+    variablesReference: number,
+    name: string,
+    value: string
+  ): Promise<VariableInfo> {
+    this.logger.debug('Setting variable', { sessionId, name, value });
+
+    const session = this.findSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const response = await session.customRequest('setVariable', {
+      variablesReference,
+      name,
+      value,
+    });
+
+    return {
+      name,
+      value: response.value,
+      type: response.type,
+      variablesReference: response.variablesReference || 0,
+      namedVariables: response.namedVariables,
+      indexedVariables: response.indexedVariables,
+    };
+  }
+
+  // ==================== Helper Methods ====================
+
+  /**
+   * Find a session by ID
+   */
+  private findSession(sessionId: string): vscode.DebugSession | undefined {
+    const activeSession = vscode.debug.activeDebugSession;
+    if (activeSession?.id === sessionId) {
+      return activeSession;
+    }
+    return undefined;
+  }
+
+  /**
+   * Wait for a debug session to start
+   */
+  private async waitForSession(timeoutMs: number = 5000): Promise<void> {
+    const startTime = Date.now();
+    while (!vscode.debug.activeDebugSession) {
+      if (Date.now() - startTime > timeoutMs) {
+        throw new Error('Timeout waiting for debug session to start');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
+  /**
+   * Get the default thread ID (first thread)
+   */
+  private async getDefaultThreadId(session: vscode.DebugSession): Promise<number> {
+    const response = await session.customRequest('threads') as DAPThreadsResponse;
+    if (response.threads.length === 0) {
+      throw new Error('No threads available');
+    }
+    return response.threads[0].id;
+  }
+
+  /**
+   * Get a stopped thread ID for stepping operations
+   */
+  private async getStoppedThreadId(session: vscode.DebugSession): Promise<number> {
+    const stoppedThreads = this.sessionStoppedThreads.get(session.id);
+    if (stoppedThreads && stoppedThreads.size > 0) {
+      return stoppedThreads.keys().next().value as number;
+    }
+    // Fall back to first thread
+    return this.getDefaultThreadId(session);
+  }
+
+  /**
+   * Get session info
+   */
+  private getSessionInfo(session: vscode.DebugSession): SessionInfo {
+    return {
+      id: session.id,
+      name: session.name,
+      type: session.type,
+      workspaceFolder: session.workspaceFolder?.uri.fsPath,
+      configuration: {
+        program: session.configuration.program,
+        args: session.configuration.args,
+        cwd: session.configuration.cwd,
+        env: session.configuration.env,
+      },
+    };
+  }
+
+  /**
+   * Dispose of resources
+   */
+  dispose() {
+    this.disposables.forEach((d) => d.dispose());
+    this.logger.dispose();
+  }
+}
