@@ -110,15 +110,15 @@
         }
       },
       {
-        "name": "debug_set_breakpoint",
-        "displayName": "Set Breakpoint",
-        "toolReferenceName": "setBreakpoint",
+        "name": "debug_set_breakpoint_by_text",
+        "displayName": "Set Breakpoint by Text",
+        "toolReferenceName": "setBreakpointByText",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Set a breakpoint at a line in a file",
-        "modelDescription": "Set a breakpoint at a specific line in a source file. Can optionally set a condition.",
+        "userDescription": "Set a breakpoint by matching exact line text",
+        "modelDescription": "Set a breakpoint by matching exact line text. More reliable than line numbers since it finds the line automatically. The text must match exactly one line in the file (whitespace is trimmed). If multiple lines match, an error is returned with context for each match - use the occurrence parameter to select which one.",
         "canBeReferencedInPrompt": true,
         "icon": "$(debug-breakpoint)",
         "inputSchema": {
@@ -128,9 +128,13 @@
               "type": "string",
               "description": "Path to the source file"
             },
-            "line": {
+            "lineText": {
+              "type": "string",
+              "description": "Exact text content of the line where the breakpoint should be set (leading/trailing whitespace is ignored)"
+            },
+            "occurrence": {
               "type": "number",
-              "description": "Line number"
+              "description": "Which occurrence to use if multiple lines match (1-indexed). Only needed when the same text appears multiple times."
             },
             "condition": {
               "type": "string",
@@ -139,7 +143,7 @@
           },
           "required": [
             "file",
-            "line"
+            "lineText"
           ]
         }
       },

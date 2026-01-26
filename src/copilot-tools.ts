@@ -157,24 +157,26 @@ function createToolDefinitions(bridge: DebugBridge): ToolDefinition[] {
 
     // Breakpoints
     {
-      name: 'debug_set_breakpoint',
-      description: 'Set a breakpoint in a source file',
+      name: 'debug_set_breakpoint_by_text',
+      description: 'Set a breakpoint by matching exact line text. More reliable than line numbers since it finds the line automatically. The text must match exactly one line in the file (whitespace is trimmed). If multiple lines match, an error is returned with context for each match - use the occurrence parameter to select which one.',
       inputSchema: {
         type: 'object',
         properties: {
           file: { type: 'string', description: 'Path to the source file' },
-          line: { type: 'number', description: 'Line number' },
+          lineText: { type: 'string', description: 'Exact text content of the line where the breakpoint should be set (leading/trailing whitespace is ignored)' },
+          occurrence: { type: 'number', description: 'Which occurrence to use if multiple lines match (1-indexed). Only needed when the same text appears multiple times.' },
           condition: { type: 'string', description: 'Condition expression' },
           hitCondition: { type: 'string', description: 'Hit count condition' },
           logMessage: { type: 'string', description: 'Log message (logpoint)' },
         },
-        required: ['file', 'line'],
+        required: ['file', 'lineText'],
       },
       handler: async (args) => {
         try {
-          const result = await bridge.setBreakpoint(
+          const result = await bridge.setBreakpointByText(
             args.file as string,
-            args.line as number,
+            args.lineText as string,
+            args.occurrence as number | undefined,
             args.condition as string | undefined,
             args.hitCondition as string | undefined,
             args.logMessage as string | undefined

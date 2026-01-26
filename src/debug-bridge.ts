@@ -4,6 +4,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import {
   SessionInfo,
   LaunchOptions,
@@ -363,6 +364,81 @@ export class DebugBridge {
       logMessage,
       enabled: true,
     };
+  }
+
+  /**
+   * Set a breakpoint by matching exact line text.
+   * This is more reliable for LLMs that don't have accurate line numbers.
+   */
+  async setBreakpointByText(
+    file: string,
+    lineText: string,
+    occurrence?: number,
+    condition?: string,
+    hitCondition?: string,
+    logMessage?: string
+  ): Promise<BreakpointInfo> {
+    this.logger.info('Setting breakpoint by text', { file, lineText, occurrence, condition });
+
+    // Read the file content
+    let fileContent: string;
+    try {
+      fileContent = fs.readFileSync(file, 'utf-8');
+    } catch (error) {
+      throw new Error(`Failed to read file: ${file}`);
+    }
+
+    const lines = fileContent.split('\n');
+    const normalizedSearchText = lineText.trim();
+    
+    // Find all matching lines
+    const matchingLines: number[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim() === normalizedSearchText) {
+        matchingLines.push(i + 1); // 1-indexed line numbers
+      }
+    }
+
+    if (matchingLines.length === 0) {
+      throw new Error(
+        `No matching line found for text: "${lineText}". ` +
+        `Make sure the text matches exactly (whitespace is trimmed).`
+      );
+    }
+
+    if (matchingLines.length > 1) {
+      // If occurrence is specified, use it
+      if (occurrence !== undefined) {
+        if (occurrence < 1 || occurrence > matchingLines.length) {
+          throw new Error(
+            `Invalid occurrence: ${occurrence}. ` +
+            `Found ${matchingLines.length} occurrences, so occurrence must be between 1 and ${matchingLines.length}.`
+          );
+        }
+        const line = matchingLines[occurrence - 1];
+        return this.setBreakpoint(file, line, condition, hitCondition, logMessage);
+      }
+
+      // Build context for each match
+      const matchContexts = matchingLines.map((lineNum, idx) => {
+        const lineIndex = lineNum - 1; // 0-indexed
+        const above = lineIndex > 0 ? lines[lineIndex - 1].trim() : '(start of file)';
+        const current = lines[lineIndex].trim();
+        const below = lineIndex < lines.length - 1 ? lines[lineIndex + 1].trim() : '(end of file)';
+        return `  Occurrence ${idx + 1} at line ${lineNum}:\n    ${above}\n  > ${current}\n    ${below}`;
+      }).join('\n\n');
+
+      throw new Error(
+        `Multiple matches found for text: "${lineText}". ` +
+        `Found ${matchingLines.length} occurrences. ` +
+        `Use the 'occurrence' parameter (1-${matchingLines.length}) to select one:\n\n${matchContexts}`
+      );
+    }
+
+    const line = matchingLines[0];
+    
+    // Use the existing setBreakpoint method
+    return this.setBreakpoint(file, line, condition, hitCondition, logMessage);
   }
 
   /**
