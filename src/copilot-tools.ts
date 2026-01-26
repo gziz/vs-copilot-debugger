@@ -60,7 +60,17 @@ function createToolDefinitions(bridge: DebugBridge): ToolDefinition[] {
     // Session management
     {
       name: 'debug_start_session',
-      description: 'Start a new Python debug session for the specified script',
+      description: `Start a new Python debug session for the specified script.
+
+Returns session info with an 'initialStop' field indicating why execution stopped:
+- reason: 'entry' (stopOnEntry), 'breakpoint', 'exception', 'step', 'pause', or 'unknown'
+- exception: For exceptions, contains {type, message, stackTrace} (e.g., ModuleNotFoundError)
+- location: {file, line, column} where execution stopped
+- terminated: true if session ended before stopping (script crashed immediately)
+- terminationReason: Why the session terminated
+
+IMPORTANT: Always check initialStop.reason after starting. If reason is 'exception', the script
+has a runtime error and you should report the exception details to the user.`,
       inputSchema: {
         type: 'object',
         properties: {

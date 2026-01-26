@@ -21,6 +21,9 @@ import {
   DAPScopesResponse,
   DAPVariablesResponse,
   DAPEvaluateResponse,
+  StopInfo,
+  ExceptionInfo,
+  StartSessionResult,
 } from './types';
 
 /**
@@ -124,6 +127,26 @@ interface BreakpointMapping {
 }
 
 /**
+ * Raw stop event data from DAP
+ */
+interface RawStopEvent {
+  reason: string;
+  threadId?: number;
+  description?: string;
+  text?: string;
+}
+
+/**
+ * Callback type for stop event listeners
+ */
+type StopEventListener = (sessionId: string, event: RawStopEvent) => void;
+
+/**
+ * Callback type for termination event listeners
+ */
+type TerminationListener = (sessionId: string, reason?: string) => void;
+
+/**
  * Debug Bridge class - wraps VS Code's debug API
  */
 export class DebugBridge {
@@ -132,6 +155,15 @@ export class DebugBridge {
   private breakpointCounter = 0;
   private sessionStoppedThreads: Map<string, Map<number, string>> = new Map();
   private disposables: vscode.Disposable[] = [];
+
+  // Store full stop event details per session (most recent)
+  private sessionStopEvents: Map<string, RawStopEvent> = new Map();
+
+  // Event listeners for stop events
+  private stopEventListeners: StopEventListener[] = [];
+
+  // Event listeners for termination events
+  private terminationListeners: TerminationListener[] = [];
 
   constructor() {
     this.logger = new DefaultLogger();
@@ -152,10 +184,32 @@ export class DebugBridge {
           }
           const threadId = event.body?.threadId as number;
           const reason = event.body?.reason as string;
+          const description = event.body?.description as string | undefined;
+          const text = event.body?.text as string | undefined;
+
           if (threadId !== undefined) {
             this.sessionStoppedThreads.get(sessionId)!.set(threadId, reason);
           }
-          this.logger.debug(`Thread ${threadId} stopped: ${reason}`, { sessionId });
+
+          // Store full stop event details
+          const rawEvent: RawStopEvent = {
+            reason,
+            threadId,
+            description,
+            text,
+          };
+          this.sessionStopEvents.set(sessionId, rawEvent);
+
+          // Fire stop event listeners
+          for (const listener of this.stopEventListeners) {
+            try {
+              listener(sessionId, rawEvent);
+            } catch (error) {
+              this.logger.error('Error in stop event listener', error);
+            }
+          }
+
+          this.logger.debug(`Thread ${threadId} stopped: ${reason}`, { sessionId, description, text });
         } else if (event.event === 'continued') {
           const sessionId = event.session.id;
           const threadId = event.body?.threadId as number;
@@ -170,6 +224,17 @@ export class DebugBridge {
     this.disposables.push(
       vscode.debug.onDidTerminateDebugSession((session) => {
         this.sessionStoppedThreads.delete(session.id);
+        this.sessionStopEvents.delete(session.id);
+
+        // Fire termination listeners
+        for (const listener of this.terminationListeners) {
+          try {
+            listener(session.id);
+          } catch (error) {
+            this.logger.error('Error in termination listener', error);
+          }
+        }
+
         this.logger.info(`Debug session terminated: ${session.name}`, { sessionId: session.id });
       })
     );
@@ -207,12 +272,206 @@ export class DebugBridge {
     this.logger.show();
   }
 
+  // ==================== Initial Stop Event Handling ====================
+
+  /**
+   * Wait for the initial stop event after starting a session.
+   * Uses polling approach for reliability across VS Code versions.
+   */
+  private async waitForInitialStop(
+    session: vscode.DebugSession,
+    timeoutMs: number = 10000
+  ): Promise<{ stopEvent?: RawStopEvent; terminated?: boolean; terminationReason?: string }> {
+    const sessionId = session.id;
+    const startTime = Date.now();
+    const pollInterval = 100;
+
+    // Set up termination listener
+    let terminated = false;
+    let terminationReason: string | undefined;
+    const terminationListener: TerminationListener = (terminatedSessionId, reason) => {
+      if (terminatedSessionId === sessionId) {
+        terminated = true;
+        terminationReason = reason;
+      }
+    };
+    this.terminationListeners.push(terminationListener);
+
+    const cleanup = () => {
+      const idx = this.terminationListeners.indexOf(terminationListener);
+      if (idx >= 0) this.terminationListeners.splice(idx, 1);
+    };
+
+    try {
+      while (Date.now() - startTime < timeoutMs) {
+        // Check if session terminated
+        if (terminated) {
+          return { terminated: true, terminationReason: terminationReason || 'Session terminated unexpectedly' };
+        }
+
+        // Check if we have a cached stop event
+        const existingEvent = this.sessionStopEvents.get(sessionId);
+        if (existingEvent) {
+          return { stopEvent: existingEvent };
+        }
+
+        // Check if any thread is stopped by checking sessionStoppedThreads
+        const stoppedThreads = this.sessionStoppedThreads.get(sessionId);
+        if (stoppedThreads && stoppedThreads.size > 0) {
+          // Get the first stopped thread's info
+          const [threadId, reason] = stoppedThreads.entries().next().value as [number, string];
+
+          // Build a RawStopEvent from the available info
+          const stopEvent: RawStopEvent = {
+            reason,
+            threadId,
+          };
+          return { stopEvent };
+        }
+
+        // Also try to poll threads directly via DAP to catch cases where our listener missed the event
+        try {
+          const threadsResponse = await session.customRequest('threads') as DAPThreadsResponse;
+          if (threadsResponse.threads.length > 0) {
+            // Try to get stack trace for first thread - if successful, it's stopped
+            const threadId = threadsResponse.threads[0].id;
+            try {
+              const stackResponse = await session.customRequest('stackTrace', {
+                threadId,
+                startFrame: 0,
+                levels: 1,
+              }) as DAPStackTraceResponse;
+
+              if (stackResponse.stackFrames.length > 0) {
+                // Thread has a stack trace, so it's stopped
+                // Check if we have a reason in our map
+                const reason = stoppedThreads?.get(threadId) || 'entry';
+                const stopEvent: RawStopEvent = {
+                  reason,
+                  threadId,
+                };
+                return { stopEvent };
+              }
+            } catch {
+              // Thread not stopped or other error, continue polling
+            }
+          }
+        } catch {
+          // Session might be terminating or not ready yet
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      }
+
+      // Timeout - return empty
+      this.logger.warn(`Timeout waiting for initial stop event for session ${sessionId}`);
+      return {};
+    } finally {
+      cleanup();
+    }
+  }
+
+  /**
+   * Build a StopInfo object from a raw stop event, fetching exception details if needed.
+   */
+  private async buildStopInfo(
+    session: vscode.DebugSession,
+    rawEvent: RawStopEvent
+  ): Promise<StopInfo> {
+    const stopInfo: StopInfo = {
+      reason: this.mapStopReason(rawEvent.reason),
+      threadId: rawEvent.threadId,
+    };
+
+    // Get location from stack trace
+    if (rawEvent.threadId !== undefined) {
+      try {
+        const stackTrace = await session.customRequest('stackTrace', {
+          threadId: rawEvent.threadId,
+          startFrame: 0,
+          levels: 1,
+        }) as DAPStackTraceResponse;
+
+        if (stackTrace.stackFrames.length > 0) {
+          const topFrame = stackTrace.stackFrames[0];
+          stopInfo.location = {
+            file: topFrame.source?.path,
+            line: topFrame.line,
+            column: topFrame.column,
+          };
+        }
+      } catch (error) {
+        this.logger.debug('Failed to get stack trace for stop info', error);
+      }
+    }
+
+    // Always try to get exception info - the reason detection might be unreliable
+    // The exceptionInfo request will fail gracefully if there's no exception
+    if (rawEvent.threadId !== undefined) {
+      try {
+        const exceptionInfo = await session.customRequest('exceptionInfo', {
+          threadId: rawEvent.threadId,
+        });
+
+        // If we got exception info, there IS an exception
+        if (exceptionInfo && (exceptionInfo.exceptionId || exceptionInfo.description)) {
+          // Update reason to exception since we confirmed there is one
+          stopInfo.reason = 'exception';
+          stopInfo.exception = {
+            type: exceptionInfo.exceptionId ||
+                  exceptionInfo.details?.typeName ||
+                  rawEvent.description ||
+                  'Unknown',
+            message: exceptionInfo.description ||
+                     exceptionInfo.details?.message ||
+                     rawEvent.text ||
+                     '',
+            stackTrace: exceptionInfo.details?.stackTrace,
+          };
+        }
+      } catch (error) {
+        // No exception or request not supported - this is expected for non-exception stops
+        this.logger.debug('No exception info available (expected for non-exception stops)', error);
+
+        // If raw event indicated exception, try to use its description/text
+        if (rawEvent.reason === 'exception' && (rawEvent.description || rawEvent.text)) {
+          stopInfo.exception = {
+            type: rawEvent.description || 'Exception',
+            message: rawEvent.text || '',
+          };
+        }
+      }
+    }
+
+    return stopInfo;
+  }
+
+  /**
+   * Map DAP stop reason to our StopInfo reason type
+   */
+  private mapStopReason(reason: string): StopInfo['reason'] {
+    switch (reason) {
+      case 'entry':
+        return 'entry';
+      case 'breakpoint':
+        return 'breakpoint';
+      case 'exception':
+        return 'exception';
+      case 'step':
+        return 'step';
+      case 'pause':
+        return 'pause';
+      default:
+        return 'unknown';
+    }
+  }
+
   // ==================== Session Management ====================
 
   /**
    * Start a new debug session for a Python script
    */
-  async startSession(options: LaunchOptions): Promise<SessionInfo> {
+  async startSession(options: LaunchOptions): Promise<StartSessionResult> {
     this.logger.info('Starting debug session', { script: options.program });
 
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -248,7 +507,23 @@ export class DebugBridge {
       throw new Error('Debug session started but not found');
     }
 
-    return this.getSessionInfo(session);
+    const sessionInfo = this.getSessionInfo(session);
+
+    // Wait for initial stop event (stopOnEntry, exception, breakpoint, or termination)
+    const initialStopResult = await this.waitForInitialStop(session);
+
+    const result: StartSessionResult = {
+      ...sessionInfo,
+    };
+
+    if (initialStopResult.terminated) {
+      result.terminated = true;
+      result.terminationReason = initialStopResult.terminationReason;
+    } else if (initialStopResult.stopEvent) {
+      result.initialStop = await this.buildStopInfo(session, initialStopResult.stopEvent);
+    }
+
+    return result;
   }
 
   /**

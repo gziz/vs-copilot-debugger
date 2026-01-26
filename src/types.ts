@@ -3,6 +3,38 @@
  */
 
 /**
+ * Information about why the debugger stopped
+ */
+export interface StopInfo {
+  reason: 'entry' | 'breakpoint' | 'exception' | 'step' | 'pause' | 'terminated' | 'unknown';
+  threadId?: number;
+  exception?: ExceptionInfo;
+  location?: {
+    file?: string;
+    line?: number;
+    column?: number;
+  };
+}
+
+/**
+ * Exception details when stopped on exception
+ */
+export interface ExceptionInfo {
+  type: string;        // e.g., "ModuleNotFoundError"
+  message: string;     // e.g., "No module named 'nonexistent'"
+  stackTrace?: string;
+}
+
+/**
+ * Extended session info returned from startSession
+ */
+export interface StartSessionResult extends SessionInfo {
+  initialStop?: StopInfo;
+  terminated?: boolean;
+  terminationReason?: string;
+}
+
+/**
  * Debug session information
  */
 export interface SessionInfo {
