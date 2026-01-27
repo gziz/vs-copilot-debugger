@@ -25,6 +25,7 @@ import {
   ExceptionInfo,
   StartSessionResult,
 } from './types';
+import { wrapMultilineExpression } from './multiline-eval';
 
 /**
  * Default maximum size for variable values in bytes.
@@ -982,7 +983,11 @@ export class DebugBridge {
   }
 
   /**
-   * Evaluate an expression
+   * Evaluate an expression.
+   *
+   * Handles multi-line expressions by wrapping them to capture the last
+   * expression's result, since Python's debugger uses exec() for multi-statement
+   * code which doesn't return values.
    */
   async evaluate(
     sessionId: string,
@@ -997,8 +1002,17 @@ export class DebugBridge {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
+    // Transform multi-line expressions to capture the last expression's result
+    const processedExpression = wrapMultilineExpression(expression);
+
+    this.logger.debug('Processed expression', {
+      original: expression.substring(0, 100),
+      processed: processedExpression.substring(0, 100),
+      wasTransformed: processedExpression !== expression
+    });
+
     const args: Record<string, unknown> = {
-      expression,
+      expression: processedExpression,
       context: context || 'repl',
     };
     if (frameId !== undefined) {
