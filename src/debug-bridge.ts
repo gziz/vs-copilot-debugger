@@ -508,6 +508,16 @@ export class DebugBridge {
       throw new Error('Debug session started but not found');
     }
 
+    // Configure exception breakpoints so the debugger stops on uncaught exceptions
+    try {
+      await session.customRequest('setExceptionBreakpoints', {
+        filters: ['uncaught'],
+      });
+      this.logger.debug('Exception breakpoints configured for session', { sessionId: session.id });
+    } catch (error) {
+      this.logger.warn('Failed to set exception breakpoints', error);
+    }
+
     const sessionInfo = this.getSessionInfo(session);
 
     // Wait for initial stop event (stopOnEntry, exception, breakpoint, or termination)
@@ -557,6 +567,16 @@ export class DebugBridge {
     const session = vscode.debug.activeDebugSession;
     if (!session) {
       throw new Error('Attached but session not found');
+    }
+
+    // Configure exception breakpoints so the debugger stops on uncaught exceptions
+    try {
+      await session.customRequest('setExceptionBreakpoints', {
+        filters: ['uncaught'],
+      });
+      this.logger.debug('Exception breakpoints configured for session', { sessionId: session.id });
+    } catch (error) {
+      this.logger.warn('Failed to set exception breakpoints', error);
     }
 
     return this.getSessionInfo(session);
