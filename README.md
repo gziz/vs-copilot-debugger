@@ -2,6 +2,9 @@
 
 A VS Code extension that exposes Python debug state to AI coding agents (GitHub Copilot and Claude Code CLI) via debug tools.
 
+https://github.com/user-attachments/assets/52646f5e-8282-48d5-bc15-5b1577bc0a7d
+> Note: The video is sped up.
+
 ## Overview
 
 This extension allows AI coding agents to programmatically control and inspect VS Code debug sessions. It supports two integration paths:
