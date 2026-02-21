@@ -365,4 +365,5 @@ export interface ExtensionConfig {
   autoStart: boolean;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   serverPort: number;
+  enableLogging: boolean;
 }

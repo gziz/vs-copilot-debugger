@@ -458,6 +458,11 @@
           "type": "number",
           "default": 0,
           "description": "Port for the MCP server (0 = auto-assign)"
+        },
+        "debugMcp.enableLogging": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable file-based debug logging to .vscode/debug-mcp.log in the workspace"
         }
       }
     }

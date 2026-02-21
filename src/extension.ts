@@ -8,6 +8,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { DebugBridge } from './debug-bridge';
 import { registerCopilotTools } from './copilot-tools';
 import { McpServerManager } from './mcp-server';
@@ -25,6 +26,7 @@ function getConfig(): ExtensionConfig {
     autoStart: config.get('autoStart', false),
     logLevel: config.get('logLevel', 'info') as ExtensionConfig['logLevel'],
     serverPort: config.get('serverPort', 0),
+    enableLogging: config.get('enableLogging', false),
   };
 }
 
@@ -43,6 +45,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Apply configuration
   const config = getConfig();
   debugBridge.setLogLevel(config.logLevel);
+
+  // Enable file-based logging only if explicitly enabled
+  if (config.enableLogging) {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (workspaceFolder) {
+      const logPath = path.join(workspaceFolder, '.vscode', 'debug-mcp.log');
+      debugBridge.setFileOutput(logPath);
+    }
+  }
 
   // Register Copilot tools (always available)
   try {

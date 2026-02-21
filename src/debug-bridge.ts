@@ -58,6 +58,8 @@ function truncateValue(value: string, maxSize: number = DEFAULT_MAX_VALUE_SIZE):
 class DefaultLogger implements Logger {
   private outputChannel: vscode.OutputChannel;
   private level: 'debug' | 'info' | 'warn' | 'error' = 'info';
+  private logFilePath?: string;
+  private logFileInitialized = false;
 
   private readonly levelPriority = {
     debug: 0,
@@ -74,6 +76,11 @@ class DefaultLogger implements Logger {
     this.level = level;
   }
 
+  setFileOutput(filePath: string) {
+    this.logFilePath = filePath;
+    this.logFileInitialized = false;
+  }
+
   private shouldLog(level: 'debug' | 'info' | 'warn' | 'error'): boolean {
     return this.levelPriority[level] >= this.levelPriority[this.level];
   }
@@ -84,27 +91,53 @@ class DefaultLogger implements Logger {
     return `[${timestamp}] [${level.toUpperCase()}] ${message}${formattedArgs}`;
   }
 
+  private writeToFile(formatted: string) {
+    if (this.logFilePath) {
+      try {
+        if (!this.logFileInitialized) {
+          const dir = path.dirname(this.logFilePath);
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
+          fs.writeFileSync(this.logFilePath, '');
+          this.logFileInitialized = true;
+        }
+        fs.appendFileSync(this.logFilePath, formatted + '\n');
+      } catch {
+        // Silently ignore file write errors to avoid recursive logging
+      }
+    }
+  }
+
   debug(message: string, ...args: unknown[]): void {
     if (this.shouldLog('debug')) {
-      this.outputChannel.appendLine(this.formatMessage('debug', message, args));
+      const formatted = this.formatMessage('debug', message, args);
+      this.outputChannel.appendLine(formatted);
+      this.writeToFile(formatted);
     }
   }
 
   info(message: string, ...args: unknown[]): void {
     if (this.shouldLog('info')) {
-      this.outputChannel.appendLine(this.formatMessage('info', message, args));
+      const formatted = this.formatMessage('info', message, args);
+      this.outputChannel.appendLine(formatted);
+      this.writeToFile(formatted);
     }
   }
 
   warn(message: string, ...args: unknown[]): void {
     if (this.shouldLog('warn')) {
-      this.outputChannel.appendLine(this.formatMessage('warn', message, args));
+      const formatted = this.formatMessage('warn', message, args);
+      this.outputChannel.appendLine(formatted);
+      this.writeToFile(formatted);
     }
   }
 
   error(message: string, ...args: unknown[]): void {
     if (this.shouldLog('error')) {
-      this.outputChannel.appendLine(this.formatMessage('error', message, args));
+      const formatted = this.formatMessage('error', message, args);
+      this.outputChannel.appendLine(formatted);
+      this.writeToFile(formatted);
     }
   }
 
@@ -264,6 +297,13 @@ export class DebugBridge {
    */
   setLogLevel(level: 'debug' | 'info' | 'warn' | 'error') {
     this.logger.setLevel(level);
+  }
+
+  /**
+   * Enable file-based logging
+   */
+  setFileOutput(filePath: string) {
+    this.logger.setFileOutput(filePath);
   }
 
   /**
