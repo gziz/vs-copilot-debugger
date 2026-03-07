@@ -1,4 +1,4 @@
-# Copilot Debug
+# Copilot Debugger
 
 A VS Code extension that exposes Python debug state to AI coding agents (GitHub Copilot and Claude Code CLI) via debug tools.
 
