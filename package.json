@@ -3,7 +3,7 @@
   "displayName": "Copilot Debug",
   "description": "Exposes Python debug state to AI coding agents (Copilot, Claude Code) via debug tools",
   "version": "0.1.0",
-  "publisher": "debug-mcp",
+  "publisher": "copilot-debug",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -423,27 +423,27 @@
     ],
     "commands": [
       {
-        "command": "debugMcp.startServer",
-        "title": "Debug MCP: Start MCP Server"
+        "command": "copilotDebug.startServer",
+        "title": "Copilot Debug: Start MCP Server"
       },
       {
-        "command": "debugMcp.stopServer",
-        "title": "Debug MCP: Stop MCP Server"
+        "command": "copilotDebug.stopServer",
+        "title": "Copilot Debug: Stop MCP Server"
       },
       {
-        "command": "debugMcp.showStatus",
-        "title": "Debug MCP: Show Status"
+        "command": "copilotDebug.showStatus",
+        "title": "Copilot Debug: Show Status"
       }
     ],
     "configuration": {
-      "title": "Debug MCP",
+      "title": "Copilot Debug",
       "properties": {
-        "debugMcp.autoStart": {
+        "copilotDebug.autoStart": {
           "type": "boolean",
           "default": false,
           "description": "Automatically start the MCP server when VS Code starts"
         },
-        "debugMcp.logLevel": {
+        "copilotDebug.logLevel": {
           "type": "string",
           "enum": [
             "debug",
@@ -452,17 +452,17 @@
             "error"
           ],
           "default": "info",
-          "description": "Log level for Debug MCP extension"
+          "description": "Log level for Copilot Debug extension"
         },
-        "debugMcp.serverPort": {
+        "copilotDebug.serverPort": {
           "type": "number",
           "default": 0,
           "description": "Port for the MCP server (0 = auto-assign)"
         },
-        "debugMcp.enableLogging": {
+        "copilotDebug.enableLogging": {
           "type": "boolean",
           "default": false,
-          "description": "Enable file-based debug logging to .vscode/debug-mcp.log in the workspace"
+          "description": "Enable file-based debug logging to .vscode/copilot-debug.log in the workspace"
         }
       }
     }

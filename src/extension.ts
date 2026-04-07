@@ -1,5 +1,5 @@
 /**
- * Debug MCP Extension Entry Point
+ * Copilot Debug Extension Entry Point
  *
  * This extension exposes Python debug state to AI coding agents via MCP tools.
  * It supports two integration paths:
@@ -21,7 +21,7 @@ let mcpServerManager: McpServerManager | undefined;
  * Get extension configuration
  */
 function getConfig(): ExtensionConfig {
-  const config = vscode.workspace.getConfiguration('debugMcp');
+  const config = vscode.workspace.getConfiguration('copilotDebug');
   return {
     autoStart: config.get('autoStart', false),
     logLevel: config.get('logLevel', 'info') as ExtensionConfig['logLevel'],
@@ -34,7 +34,7 @@ function getConfig(): ExtensionConfig {
  * Extension activation
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  console.log('Debug MCP extension activating...');
+  console.log('Copilot Debug extension activating...');
 
   // Create the debug bridge
   debugBridge = new DebugBridge();
@@ -50,7 +50,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (config.enableLogging) {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (workspaceFolder) {
-      const logPath = path.join(workspaceFolder, '.vscode', 'debug-mcp.log');
+      const logPath = path.join(workspaceFolder, '.vscode', 'copilot-debug.log');
       debugBridge.setFileOutput(logPath);
     }
   }
@@ -72,25 +72,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // Register commands
   context.subscriptions.push(
-    vscode.commands.registerCommand('debugMcp.startServer', () => {
+    vscode.commands.registerCommand('copilotDebug.startServer', () => {
       mcpServerManager?.start();
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('debugMcp.stopServer', () => {
+    vscode.commands.registerCommand('copilotDebug.stopServer', () => {
       mcpServerManager?.stop();
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('debugMcp.showStatus', () => {
+    vscode.commands.registerCommand('copilotDebug.showStatus', () => {
       mcpServerManager?.showStatus();
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('debugMcp.showOutput', () => {
+    vscode.commands.registerCommand('copilotDebug.showOutput', () => {
       debugBridge?.showOutput();
     })
   );
@@ -98,7 +98,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Watch for configuration changes
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('debugMcp')) {
+      if (event.affectsConfiguration('copilotDebug')) {
         const newConfig = getConfig();
         debugBridge?.setLogLevel(newConfig.logLevel);
       }
@@ -111,10 +111,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 
   // Show welcome message on first activation
-  const hasShownWelcome = context.globalState.get('debugMcp.hasShownWelcome', false);
+  const hasShownWelcome = context.globalState.get('copilotDebug.hasShownWelcome', false);
   if (!hasShownWelcome) {
     const message =
-      'Debug MCP extension activated. Use "Debug MCP: Start MCP Server" command to enable Claude Code CLI integration.';
+      'Copilot Debug extension activated. Use "Copilot Debug: Start MCP Server" command to enable Claude Code CLI integration.';
     vscode.window.showInformationMessage(message, 'Learn More').then((selection) => {
       if (selection === 'Learn More') {
         vscode.env.openExternal(
@@ -122,17 +122,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
       }
     });
-    context.globalState.update('debugMcp.hasShownWelcome', true);
+    context.globalState.update('copilotDebug.hasShownWelcome', true);
   }
 
-  console.log('Debug MCP extension activated');
+  console.log('Copilot Debug extension activated');
 }
 
 /**
  * Extension deactivation
  */
 export function deactivate(): void {
-  console.log('Debug MCP extension deactivating...');
+  console.log('Copilot Debug extension deactivating...');
 
   if (mcpServerManager) {
     mcpServerManager.dispose();
@@ -144,7 +144,7 @@ export function deactivate(): void {
     debugBridge = undefined;
   }
 
-  console.log('Debug MCP extension deactivated');
+  console.log('Copilot Debug extension deactivated');
 }
 
 /**

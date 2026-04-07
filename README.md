@@ -61,7 +61,7 @@ This extension allows AI coding agents to programmatically control and inspect V
 ### Build from Source
 
 ```bash
-cd debug-mcp-vscode
+cd copilot-debug-vscode
 npm install
 npm run compile
 ```
@@ -89,16 +89,16 @@ Once the extension is installed, the debug tools are automatically available in 
 ### With Claude Code
 
 1. Start the MCP server:
-   - Run command: `Debug MCP: Start MCP Server`
+   - Run command: `Copilot Debug: Start MCP Server`
 
 2. Configure Claude Code to use the MCP server (add to your Claude Code config):
 
 ```json
 {
   "mcpServers": {
-    "debug-mcp": {
+    "copilot-debug": {
       "command": "code",
-      "args": ["--command", "debugMcp.startServer"]
+      "args": ["--command", "copilotDebug.startServer"]
     }
   }
 }
@@ -139,14 +139,14 @@ Once the extension is installed, the debug tools are automatically available in 
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `debugMcp.autoStart` | boolean | `false` | Auto-start MCP server on VS Code launch |
-| `debugMcp.logLevel` | string | `info` | Log level: debug, info, warn, error |
-| `debugMcp.serverPort` | number | `0` | MCP server port (0 = auto-assign) |
+| `copilotDebug.autoStart` | boolean | `false` | Auto-start MCP server on VS Code launch |
+| `copilotDebug.logLevel` | string | `info` | Log level: debug, info, warn, error |
+| `copilotDebug.serverPort` | number | `0` | MCP server port (0 = auto-assign) |
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `Debug MCP: Start MCP Server` | Start the MCP server for Claude Code |
-| `Debug MCP: Stop MCP Server` | Stop the MCP server |
-| `Debug MCP: Show Status` | Show server status and available tools |
+| `Copilot Debug: Start MCP Server` | Start the MCP server for Claude Code |
+| `Copilot Debug: Stop MCP Server` | Stop the MCP server |
+| `Copilot Debug: Show Status` | Show server status and available tools |

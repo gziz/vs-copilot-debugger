@@ -1,5 +1,5 @@
 /**
- * Shared type definitions for Debug MCP extension
+ * Shared type definitions for Copilot Debug extension
  */
 
 /**

@@ -1,4 +1,4 @@
-# Debug MCP - VS Code Extension
+# Copilot Debug - VS Code Extension
 
 VS Code extension that exposes Python debug state to AI coding agents via MCP tools. Two integration paths:
 
@@ -48,7 +48,7 @@ Claude Code CLI (STDIO MCP)    ←──┘
 ```
 
 - **DebugBridge** (`src/debug-bridge.ts`) is the central class. Wraps VS Code debug API, manages breakpoints (internal ID mapping `bp_1`, `bp_2`...), tracks stopped threads per session, fires stop/termination event listeners.
-- **DefaultLogger** (private class in `debug-bridge.ts`) logs to both VS Code Output Channel and optionally to a file (`setFileOutput()`). Log file defaults to `${workspaceFolder}/.vscode/debug-mcp.log`.
+- **DefaultLogger** (private class in `debug-bridge.ts`) logs to both VS Code Output Channel and optionally to a file (`setFileOutput()`). Log file defaults to `${workspaceFolder}/.vscode/copilot-debug.log`.
 - Extension activates on startup (`onStartupFinished`), sets log level to `debug`, enables file logging automatically.
 
 ## Available MCP tools
@@ -74,16 +74,16 @@ Claude Code CLI (STDIO MCP)    ←──┘
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `debugMcp.autoStart` | boolean | `false` | Auto-start MCP server on VS Code launch |
-| `debugMcp.logLevel` | string | `"info"` | Log level: debug, info, warn, error |
-| `debugMcp.serverPort` | number | `0` | MCP server port (0 = auto-assign) |
-| `debugMcp.logFile` | string | — | Override default log file path |
+| `copilotDebug.autoStart` | boolean | `false` | Auto-start MCP server on VS Code launch |
+| `copilotDebug.logLevel` | string | `"info"` | Log level: debug, info, warn, error |
+| `copilotDebug.serverPort` | number | `0` | MCP server port (0 = auto-assign) |
+| `copilotDebug.logFile` | string | — | Override default log file path |
 
 ## VS Code commands
 
-- `Debug MCP: Start MCP Server` — start MCP server for Claude Code
-- `Debug MCP: Stop MCP Server` — stop the MCP server
-- `Debug MCP: Show Status` — show server status
+- `Copilot Debug: Start MCP Server` — start MCP server for Claude Code
+- `Copilot Debug: Stop MCP Server` — stop the MCP server
+- `Copilot Debug: Show Status` — show server status
 
 ## Conventions
 

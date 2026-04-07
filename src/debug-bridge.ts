@@ -69,7 +69,7 @@ class DefaultLogger implements Logger {
   };
 
   constructor() {
-    this.outputChannel = vscode.window.createOutputChannel('Debug MCP');
+    this.outputChannel = vscode.window.createOutputChannel('Copilot Debug');
   }
 
   setLevel(level: 'debug' | 'info' | 'warn' | 'error') {

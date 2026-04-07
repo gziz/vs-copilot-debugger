@@ -75,7 +75,7 @@ export class DebugMcpServer {
   private isRunning = false;
 
   constructor(private bridge: DebugBridge) {
-    this.outputChannel = vscode.window.createOutputChannel('Debug MCP Server');
+    this.outputChannel = vscode.window.createOutputChannel('Copilot Debug Server');
     this.registerTools();
   }
 
@@ -660,16 +660,8 @@ export class DebugMcpServer {
  */
 export class McpServerManager {
   private server: DebugMcpServer | null = null;
-  private statusBarItem: vscode.StatusBarItem;
 
-  constructor(private bridge: DebugBridge) {
-    this.statusBarItem = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Right,
-      100
-    );
-    this.statusBarItem.command = 'debugMcp.showStatus';
-    this.updateStatusBar();
-  }
+  constructor(private bridge: DebugBridge) {}
 
   /**
    * Start the MCP server
@@ -682,9 +674,8 @@ export class McpServerManager {
 
     this.server = new DebugMcpServer(this.bridge);
     this.server.start();
-    this.updateStatusBar();
 
-    vscode.window.showInformationMessage('Debug MCP Server started');
+    vscode.window.showInformationMessage('Copilot Debug Server started');
   }
 
   /**
@@ -699,9 +690,8 @@ export class McpServerManager {
     this.server.stop();
     this.server.dispose();
     this.server = null;
-    this.updateStatusBar();
 
-    vscode.window.showInformationMessage('Debug MCP Server stopped');
+    vscode.window.showInformationMessage('Copilot Debug Server stopped');
   }
 
   /**
@@ -711,31 +701,13 @@ export class McpServerManager {
     const status = this.server ? 'Running' : 'Stopped';
     const tools = this.server ? this.server.getToolsList() : [];
 
-    let message = `Debug MCP Server: ${status}`;
+    let message = `Copilot Debug Server: ${status}`;
     if (tools.length > 0) {
       message += `\n\nAvailable tools (${tools.length}):\n`;
       message += tools.map((t) => `  - ${t.name}`).join('\n');
     }
 
     vscode.window.showInformationMessage(message, { modal: true });
-  }
-
-  /**
-   * Update the status bar
-   */
-  private updateStatusBar(): void {
-    if (this.server) {
-      this.statusBarItem.text = '$(debug) MCP: Running';
-      this.statusBarItem.tooltip = 'Debug MCP Server is running';
-      this.statusBarItem.backgroundColor = undefined;
-    } else {
-      this.statusBarItem.text = '$(debug) MCP: Stopped';
-      this.statusBarItem.tooltip = 'Debug MCP Server is stopped';
-      this.statusBarItem.backgroundColor = new vscode.ThemeColor(
-        'statusBarItem.warningBackground'
-      );
-    }
-    this.statusBarItem.show();
   }
 
   /**
@@ -752,6 +724,5 @@ export class McpServerManager {
     if (this.server) {
       this.server.dispose();
     }
-    this.statusBarItem.dispose();
   }
 }
