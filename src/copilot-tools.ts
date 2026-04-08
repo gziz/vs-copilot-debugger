@@ -49,6 +49,7 @@ interface ToolDefinition {
   name: string;
   description: string;
   inputSchema: JsonSchema;
+  invocationMessage?: string | ((args: Record<string, unknown>) => string);
   handler: (args: Record<string, unknown>) => Promise<string>;
 }
 
@@ -71,6 +72,7 @@ Returns session info with an 'initialStop' field indicating why execution stoppe
 
 IMPORTANT: Always check initialStop.reason after starting. If reason is 'exception', the script
 has a runtime error and you should report the exception details to the user.`,
+      invocationMessage: (args) => `Starting debug session for ${(args.script as string) || 'script'}`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -105,6 +107,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_stop_session',
       description: 'Stop an active debug session',
+      invocationMessage: 'Stopping debug session',
       inputSchema: {
         type: 'object',
         properties: {
@@ -125,6 +128,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_list_sessions',
       description: 'List all active debug sessions',
+      invocationMessage: 'Listing debug sessions',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -142,6 +146,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_attach',
       description: 'Attach to a running debugpy process',
+      invocationMessage: (args) => `Attaching to debugpy on port ${args.port || 'unknown'}`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -169,6 +174,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_set_breakpoint_by_text',
       description: 'Set a breakpoint by matching exact line text. More reliable than line numbers since it finds the line automatically. The text must match exactly one line in the file (whitespace is trimmed). If multiple lines match, an error is returned with context for each match - use the occurrence parameter to select which one.',
+      invocationMessage: 'Setting breakpoint',
       inputSchema: {
         type: 'object',
         properties: {
@@ -201,6 +207,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_remove_breakpoint',
       description: 'Remove a breakpoint',
+      invocationMessage: 'Removing breakpoint',
       inputSchema: {
         type: 'object',
         properties: {
@@ -221,6 +228,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_list_breakpoints',
       description: 'List all breakpoints',
+      invocationMessage: 'Listing breakpoints',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -239,6 +247,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_continue',
       description: 'Continue execution until the next breakpoint or program end',
+      invocationMessage: 'Continuing execution',
       inputSchema: {
         type: 'object',
         properties: {
@@ -260,6 +269,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_pause',
       description: 'Pause execution of the debugged program',
+      invocationMessage: 'Pausing execution',
       inputSchema: {
         type: 'object',
         properties: {
@@ -281,6 +291,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_step_into',
       description: 'Step into a function call',
+      invocationMessage: 'Stepping into function',
       inputSchema: {
         type: 'object',
         properties: {
@@ -302,6 +313,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_step_over',
       description: 'Step over the current line',
+      invocationMessage: 'Stepping over line',
       inputSchema: {
         type: 'object',
         properties: {
@@ -323,6 +335,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_step_out',
       description: 'Step out of the current function',
+      invocationMessage: 'Stepping out of function',
       inputSchema: {
         type: 'object',
         properties: {
@@ -345,6 +358,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_get_threads',
       description: 'Get all threads in the debug session',
+      invocationMessage: 'Getting threads',
       inputSchema: {
         type: 'object',
         properties: {
@@ -365,6 +379,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_get_stack_trace',
       description: 'Get the call stack for a thread',
+      invocationMessage: 'Getting stack trace',
       inputSchema: {
         type: 'object',
         properties: {
@@ -393,6 +408,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_get_scopes',
       description: 'Get variable scopes for a stack frame',
+      invocationMessage: 'Getting variable scopes',
       inputSchema: {
         type: 'object',
         properties: {
@@ -417,6 +433,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_get_variables',
       description: 'Get variables in a scope',
+      invocationMessage: 'Getting variables',
       inputSchema: {
         type: 'object',
         properties: {
@@ -447,6 +464,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_evaluate',
       description: 'Evaluate an expression in the current debug context',
+      invocationMessage: (args) => `Evaluating: ${(args.expression as string) || 'expression'}`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -479,6 +497,7 @@ has a runtime error and you should report the exception details to the user.`,
     {
       name: 'debug_set_variable',
       description: 'Set the value of a variable',
+      invocationMessage: (args) => `Setting variable ${(args.name as string) || ''}`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -510,19 +529,38 @@ has a runtime error and you should report the exception details to the user.`,
  * Wrapper class that implements the VS Code Language Model Tool interface
  * This provides compatibility with the evolving VS Code API
  */
-class LanguageModelToolWrapper {
+class LanguageModelToolWrapper implements vscode.LanguageModelTool<Record<string, unknown>> {
   constructor(
-    public readonly name: string,
-    public readonly description: string,
-    public readonly inputSchema: JsonSchema,
+    private readonly toolName: string,
+    private readonly toolDescription: string,
+    private readonly toolInputSchema: JsonSchema,
+    private readonly invocationMsg: string | ((args: Record<string, unknown>) => string) | undefined,
     private readonly handler: (args: Record<string, unknown>) => Promise<string>
   ) {}
 
   /**
-   * Invoke the tool - this matches the VS Code LanguageModelTool interface
+   * Prepare the tool invocation - provides the progress message shown in Copilot Chat
+   */
+  async prepareInvocation(
+    options: vscode.LanguageModelToolInvocationPrepareOptions<Record<string, unknown>>,
+    _token: vscode.CancellationToken
+  ): Promise<vscode.PreparedToolInvocation> {
+    let message: string;
+    if (typeof this.invocationMsg === 'function') {
+      message = this.invocationMsg(options.input);
+    } else if (this.invocationMsg) {
+      message = this.invocationMsg;
+    } else {
+      message = `Running ${this.toolName}`;
+    }
+    return { invocationMessage: message };
+  }
+
+  /**
+   * Invoke the tool - returns the result to the LLM and Copilot Chat UI
    */
   async invoke(
-    options: { input: Record<string, unknown> },
+    options: vscode.LanguageModelToolInvocationOptions<Record<string, unknown>>,
     _token: vscode.CancellationToken
   ): Promise<vscode.LanguageModelToolResult> {
     const result = await this.handler(options.input);
@@ -553,13 +591,12 @@ export function registerCopilotTools(
         def.name,
         def.description,
         def.inputSchema,
+        def.invocationMessage,
         def.handler
       );
 
-      // Use type assertion to work around TypeScript strictness with evolving API
-      const tool = wrapper as unknown as vscode.LanguageModelTool<Record<string, unknown>>;
       context.subscriptions.push(
-        vscode.lm.registerTool(def.name, tool)
+        vscode.lm.registerTool(def.name, wrapper)
       );
     } catch (error) {
       console.error(`Failed to register tool ${def.name}:`, error);
