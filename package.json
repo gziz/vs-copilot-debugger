@@ -3,6 +3,7 @@
   "displayName": "Copilot Debug",
   "description": "Exposes Python debug state to AI coding agents (Copilot, Claude Code) via debug tools",
   "version": "0.1.0",
+  "icon": "images/debugger_icon.png",
   "publisher": "copilot-debug",
   "engines": {
     "vscode": "^1.95.0"
@@ -20,14 +21,13 @@
     "languageModelTools": [
       {
         "name": "debug_start_session",
-        "displayName": "Start Debug Session",
-        "toolReferenceName": "startDebug",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Start a new Python debug session",
-        "modelDescription": "Create a debug session and start debugging a Python script. Returns the session ID needed for other debug operations.",
+        "toolReferenceName": "startDebug",
+        "displayName": "Start Debug Session",
+        "modelDescription": "Start a new Python debug session for the specified script. Returns session info with initialStop field.",
         "canBeReferencedInPrompt": true,
         "icon": "$(debug-start)",
         "inputSchema": {
@@ -42,7 +42,11 @@
               "items": {
                 "type": "string"
               },
-              "description": "Arguments to pass to the script"
+              "description": "Command-line arguments"
+            },
+            "cwd": {
+              "type": "string",
+              "description": "Working directory"
             },
             "stopOnEntry": {
               "type": "boolean",
@@ -54,11 +58,11 @@
             },
             "pythonPath": {
               "type": "string",
-              "description": "Path to Python executable (optional, auto-detected if not provided)"
+              "description": "Path to Python executable"
             },
             "name": {
               "type": "string",
-              "description": "Optional session name"
+              "description": "Session name"
             }
           },
           "required": [
@@ -68,14 +72,13 @@
       },
       {
         "name": "debug_stop_session",
-        "displayName": "Stop Debug Session",
-        "toolReferenceName": "stopDebug",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Stop a debug session",
-        "modelDescription": "Stop and close a debug session",
+        "toolReferenceName": "stopDebug",
+        "displayName": "Stop Debug Session",
+        "modelDescription": "Stop an active debug session",
         "canBeReferencedInPrompt": true,
         "icon": "$(debug-stop)",
         "inputSchema": {
@@ -93,32 +96,61 @@
       },
       {
         "name": "debug_list_sessions",
-        "displayName": "List Debug Sessions",
-        "toolReferenceName": "listDebugSessions",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "List all active debug sessions",
-        "modelDescription": "List all active debug sessions. Returns session IDs and their status.",
+        "toolReferenceName": "listDebugSessions",
+        "displayName": "List Debug Sessions",
+        "modelDescription": "List all active debug sessions with their IDs and status",
         "canBeReferencedInPrompt": true,
         "icon": "$(list-unordered)",
         "inputSchema": {
           "type": "object",
-          "properties": {},
-          "required": []
+          "properties": {}
         }
       },
       {
-        "name": "debug_set_breakpoint_by_text",
-        "displayName": "Set Breakpoint by Text",
-        "toolReferenceName": "setBreakpointByText",
+        "name": "debug_attach",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Set a breakpoint by matching exact line text",
-        "modelDescription": "Set a breakpoint by matching exact line text. More reliable than line numbers since it finds the line automatically. The text must match exactly one line in the file (whitespace is trimmed). If multiple lines match, an error is returned with context for each match - use the occurrence parameter to select which one.",
+        "toolReferenceName": "attachDebug",
+        "displayName": "Attach to Debug Session",
+        "modelDescription": "Attach to a running debugpy process",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-start)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Host (default: localhost)"
+            },
+            "port": {
+              "type": "number",
+              "description": "Port to connect to"
+            },
+            "name": {
+              "type": "string",
+              "description": "Session name"
+            }
+          },
+          "required": [
+            "port"
+          ]
+        }
+      },
+      {
+        "name": "debug_set_breakpoint_by_text",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "toolReferenceName": "setBreakpointByText",
+        "displayName": "Set Breakpoint by Text",
+        "modelDescription": "Set a breakpoint by matching exact line text in a file. Use occurrence param if multiple lines match.",
         "canBeReferencedInPrompt": true,
         "icon": "$(debug-breakpoint)",
         "inputSchema": {
@@ -130,15 +162,23 @@
             },
             "lineText": {
               "type": "string",
-              "description": "Exact text content of the line where the breakpoint should be set (leading/trailing whitespace is ignored)"
+              "description": "Exact text of the line (whitespace trimmed)"
             },
             "occurrence": {
               "type": "number",
-              "description": "Which occurrence to use if multiple lines match (1-indexed). Only needed when the same text appears multiple times."
+              "description": "Which occurrence (1-indexed) if multiple match"
             },
             "condition": {
               "type": "string",
-              "description": "Optional condition expression"
+              "description": "Condition expression"
+            },
+            "hitCondition": {
+              "type": "string",
+              "description": "Hit count condition"
+            },
+            "logMessage": {
+              "type": "string",
+              "description": "Log message (logpoint)"
             }
           },
           "required": [
@@ -149,13 +189,12 @@
       },
       {
         "name": "debug_remove_breakpoint",
-        "displayName": "Remove Breakpoint",
-        "toolReferenceName": "removeBreakpoint",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Remove a breakpoint",
+        "toolReferenceName": "removeBreakpoint",
+        "displayName": "Remove Breakpoint",
         "modelDescription": "Remove a breakpoint by its ID",
         "canBeReferencedInPrompt": true,
         "icon": "$(debug-breakpoint-disabled)",
@@ -173,14 +212,29 @@
         }
       },
       {
-        "name": "debug_continue",
-        "displayName": "Continue Execution",
-        "toolReferenceName": "continueDebug",
+        "name": "debug_list_breakpoints",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Continue program execution",
+        "toolReferenceName": "listBreakpoints",
+        "displayName": "List Breakpoints",
+        "modelDescription": "List all breakpoints",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-breakpoint)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "debug_continue",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "toolReferenceName": "continueDebug",
+        "displayName": "Continue Execution",
         "modelDescription": "Continue execution until next breakpoint or program end",
         "canBeReferencedInPrompt": true,
         "icon": "$(debug-continue)",
@@ -190,6 +244,10 @@
             "sessionId": {
               "type": "string",
               "description": "Debug session ID"
+            },
+            "threadId": {
+              "type": "number",
+              "description": "Thread ID (optional)"
             }
           },
           "required": [
@@ -198,23 +256,26 @@
         }
       },
       {
-        "name": "debug_step_over",
-        "displayName": "Step Over",
-        "toolReferenceName": "stepOver",
+        "name": "debug_pause",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Step over to the next line",
-        "modelDescription": "Step over the current line without entering function calls",
+        "toolReferenceName": "pauseDebug",
+        "displayName": "Pause Execution",
+        "modelDescription": "Pause execution of the debugged program",
         "canBeReferencedInPrompt": true,
-        "icon": "$(debug-step-over)",
+        "icon": "$(debug-pause)",
         "inputSchema": {
           "type": "object",
           "properties": {
             "sessionId": {
               "type": "string",
               "description": "Debug session ID"
+            },
+            "threadId": {
+              "type": "number",
+              "description": "Thread ID (optional)"
             }
           },
           "required": [
@@ -224,14 +285,13 @@
       },
       {
         "name": "debug_step_into",
-        "displayName": "Step Into",
-        "toolReferenceName": "stepInto",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Step into a function call",
-        "modelDescription": "Step into the next function call",
+        "toolReferenceName": "stepInto",
+        "displayName": "Step Into",
+        "modelDescription": "Step into a function call",
         "canBeReferencedInPrompt": true,
         "icon": "$(debug-step-into)",
         "inputSchema": {
@@ -240,6 +300,38 @@
             "sessionId": {
               "type": "string",
               "description": "Debug session ID"
+            },
+            "threadId": {
+              "type": "number",
+              "description": "Thread ID (optional)"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        }
+      },
+      {
+        "name": "debug_step_over",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "toolReferenceName": "stepOver",
+        "displayName": "Step Over",
+        "modelDescription": "Step over the current line",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(debug-step-over)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Debug session ID"
+            },
+            "threadId": {
+              "type": "number",
+              "description": "Thread ID (optional)"
             }
           },
           "required": [
@@ -249,16 +341,43 @@
       },
       {
         "name": "debug_step_out",
-        "displayName": "Step Out",
-        "toolReferenceName": "stepOut",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Step out of the current function",
-        "modelDescription": "Step out and return to the caller function",
+        "toolReferenceName": "stepOut",
+        "displayName": "Step Out",
+        "modelDescription": "Step out of the current function",
         "canBeReferencedInPrompt": true,
         "icon": "$(debug-step-out)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Debug session ID"
+            },
+            "threadId": {
+              "type": "number",
+              "description": "Thread ID (optional)"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        }
+      },
+      {
+        "name": "debug_get_threads",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "toolReferenceName": "getThreads",
+        "displayName": "Get Threads",
+        "modelDescription": "Get all threads and their states in the debug session",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(list-tree)",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -274,14 +393,13 @@
       },
       {
         "name": "debug_get_stack_trace",
-        "displayName": "Get Stack Trace",
-        "toolReferenceName": "getStackTrace",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Get the current call stack",
-        "modelDescription": "Get the current stack trace showing the call hierarchy and source locations",
+        "toolReferenceName": "getStackTrace",
+        "displayName": "Get Stack Trace",
+        "modelDescription": "Get the call stack for a thread",
         "canBeReferencedInPrompt": true,
         "icon": "$(debug-stackframe)",
         "inputSchema": {
@@ -291,9 +409,17 @@
               "type": "string",
               "description": "Debug session ID"
             },
-            "includeInternals": {
-              "type": "boolean",
-              "description": "Include internal frames (default: false)"
+            "threadId": {
+              "type": "number",
+              "description": "Thread ID (optional)"
+            },
+            "startFrame": {
+              "type": "number",
+              "description": "Start frame index"
+            },
+            "levels": {
+              "type": "number",
+              "description": "Number of frames to retrieve"
             }
           },
           "required": [
@@ -303,14 +429,13 @@
       },
       {
         "name": "debug_get_scopes",
-        "displayName": "Get Scopes",
-        "toolReferenceName": "getScopes",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Get variable scopes in a stack frame",
-        "modelDescription": "Get variable scopes (locals, globals, etc.) for a specific stack frame",
+        "toolReferenceName": "getScopes",
+        "displayName": "Get Scopes",
+        "modelDescription": "Get variable scopes (locals, globals) for a stack frame",
         "canBeReferencedInPrompt": true,
         "icon": "$(symbol-namespace)",
         "inputSchema": {
@@ -333,14 +458,13 @@
       },
       {
         "name": "debug_get_variables",
-        "displayName": "Get Variables",
-        "toolReferenceName": "getVariables",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Get variables in a scope",
-        "modelDescription": "Get variable names, types, and values in a specific scope",
+        "toolReferenceName": "getVariables",
+        "displayName": "Get Variables",
+        "modelDescription": "Get variable names, types, and values in a scope",
         "canBeReferencedInPrompt": true,
         "icon": "$(symbol-variable)",
         "inputSchema": {
@@ -353,6 +477,22 @@
             "variablesReference": {
               "type": "number",
               "description": "Variables reference from scope or variable"
+            },
+            "filter": {
+              "type": "string",
+              "enum": [
+                "indexed",
+                "named"
+              ],
+              "description": "Filter type"
+            },
+            "start": {
+              "type": "number",
+              "description": "Start index for indexed variables"
+            },
+            "count": {
+              "type": "number",
+              "description": "Number of variables to retrieve"
             }
           },
           "required": [
@@ -362,40 +502,14 @@
         }
       },
       {
-        "name": "debug_get_threads",
-        "displayName": "Get Threads",
-        "toolReferenceName": "getThreads",
-        "tags": [
-          "debugging",
-          "copilot-debug"
-        ],
-        "userDescription": "Get all threads in the debug session",
-        "modelDescription": "Get all threads and their states in the debug session",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(list-tree)",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "sessionId": {
-              "type": "string",
-              "description": "Debug session ID"
-            }
-          },
-          "required": [
-            "sessionId"
-          ]
-        }
-      },
-      {
         "name": "debug_evaluate",
-        "displayName": "Evaluate Expression",
-        "toolReferenceName": "evaluate",
         "tags": [
           "debugging",
           "copilot-debug"
         ],
-        "userDescription": "Evaluate an expression in the debug context",
-        "modelDescription": "Evaluate a Python expression in the current debug context and return the result",
+        "toolReferenceName": "evaluate",
+        "displayName": "Evaluate Expression",
+        "modelDescription": "Evaluate a Python expression in the current debug context",
         "canBeReferencedInPrompt": true,
         "icon": "$(debug-console)",
         "inputSchema": {
@@ -411,7 +525,17 @@
             },
             "frameId": {
               "type": "number",
-              "description": "Optional stack frame ID"
+              "description": "Stack frame ID (optional)"
+            },
+            "context": {
+              "type": "string",
+              "enum": [
+                "watch",
+                "repl",
+                "hover",
+                "clipboard"
+              ],
+              "description": "Evaluation context"
             }
           },
           "required": [
@@ -419,30 +543,56 @@
             "expression"
           ]
         }
+      },
+      {
+        "name": "debug_set_variable",
+        "tags": [
+          "debugging",
+          "copilot-debug"
+        ],
+        "toolReferenceName": "setVariable",
+        "displayName": "Set Variable",
+        "modelDescription": "Set the value of a variable",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(symbol-variable)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Debug session ID"
+            },
+            "variablesReference": {
+              "type": "number",
+              "description": "Variables reference containing the variable"
+            },
+            "name": {
+              "type": "string",
+              "description": "Variable name"
+            },
+            "value": {
+              "type": "string",
+              "description": "New value"
+            }
+          },
+          "required": [
+            "sessionId",
+            "variablesReference",
+            "name",
+            "value"
+          ]
+        }
       }
     ],
     "commands": [
       {
-        "command": "copilotDebug.startServer",
-        "title": "Copilot Debug: Start MCP Server"
-      },
-      {
-        "command": "copilotDebug.stopServer",
-        "title": "Copilot Debug: Stop MCP Server"
-      },
-      {
-        "command": "copilotDebug.showStatus",
-        "title": "Copilot Debug: Show Status"
+        "command": "copilotDebug.showOutput",
+        "title": "Copilot Debug: Show Output"
       }
     ],
     "configuration": {
       "title": "Copilot Debug",
       "properties": {
-        "copilotDebug.autoStart": {
-          "type": "boolean",
-          "default": false,
-          "description": "Automatically start the MCP server when VS Code starts"
-        },
         "copilotDebug.logLevel": {
           "type": "string",
           "enum": [
@@ -453,11 +603,6 @@
           ],
           "default": "info",
           "description": "Log level for Copilot Debug extension"
-        },
-        "copilotDebug.serverPort": {
-          "type": "number",
-          "default": 0,
-          "description": "Port for the MCP server (0 = auto-assign)"
         },
         "copilotDebug.enableLogging": {
           "type": "boolean",
@@ -485,8 +630,5 @@
     "eslint": "^8.54.0",
     "mocha": "^11.7.5",
     "typescript": "^5.3.0"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
   }
 }

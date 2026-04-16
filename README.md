@@ -1,116 +1,64 @@
 # Copilot Debugger
 
-A VS Code extension that exposes Python debug state to AI coding agents (GitHub Copilot and Claude Code CLI) via debug tools.
+A VS Code extension that lets **GitHub Copilot Chat** drive your VS Code Python debugger. Copilot can start debug sessions, set breakpoints, step through code, and inspect variables — and you see all of it live in the VS Code UI (gutter markers, debug console, editor step highlights).
 
 https://github.com/user-attachments/assets/52646f5e-8282-48d5-bc15-5b1577bc0a7d
 > Note: The video is sped up.
 
-## Overview
+## Why Github Copilot only?
 
-This extension allows AI coding agents to programmatically control and inspect VS Code debug sessions. It supports two integration paths:
+It would be natural to also ship a standalone MCP server so external agents like Claude Code CLI could use these tools — but we deliberately don't, and the reason is worth stating up front.
 
-1. **VS Code Copilot**: Tools are registered via `vscode.lm.registerTool()` API and available directly in Copilot Chat
-2. **Claude Code CLI**: Extension provides an MCP server that communicates via STDIO
+**MCP servers are easy to write** when the tools wrap something self-contained (a database, an HTTP API, a CLI).
+
+**Our tools wrap `vscode.debug.*`**, which is fundamentally different: it only exists inside the VS Code extension host process. It controls a specific VS Code window's debug session and drives visible UI — breakpoint gutters, the debug console, editor step highlights. An MCP server spawned by an external agent runs in its own process and has no way to reach into VS Code. Making that work requires a second process bridged to the extension host over IPC, with socket discovery, workspace-to-window arbitration, lifecycle management, and event streaming — a real chunk of infrastructure.
+
+The alternative — an MCP server that drives `debugpy` directly via DAP without involving VS Code — is simple, but it gives up the point of this project. The value here is that **Copilot drives *your* VS Code debugger**: you watch it work, share state with your human debugging session, and see everything in the native UI. A standalone debugpy driver would be a different (and already well-trodden) project.
+
+GitHub Copilot Chat runs in the same process as the extension and can call `vscode.lm.registerTool()` directly — no IPC needed — so the Copilot-only path delivers the full experience with a fraction of the infrastructure.
 
 ## Architecture
 
 ```
-┌─────────────────┐     ┌─────────────────┐
-│  GitHub Copilot │     │   Claude Code   │
-│   (in VS Code)  │     │     (CLI)       │
-└────────┬────────┘     └────────┬────────┘
-         │                       │
-   vscode.lm API            STDIO MCP
-         │                       │
-         └───────────┬───────────┘
-                     │
-         ┌───────────▼───────────┐
-         │   VS Code Extension   │
-         │   (copilot-debug)     │
-         └───────────┬───────────┘
-                     │
-         ┌───────────▼───────────┐
-         │  vscode.debug API     │
-         │  (Debug Bridge)       │
-         └───────────┬───────────┘
-                     │
-         ┌───────────▼───────────┐
-         │  VS Code Debugger     │
-         │  (Python/debugpy)     │
-         └───────────────────────┘
+GitHub Copilot Chat  ──(vscode.lm API)──▶  Extension  ──▶  DebugBridge  ──▶  vscode.debug  ──▶  debugpy
 ```
 
 ## Features
 
-- Start and stop Python debug sessions
-- Attach to running debugpy processes
-- Set, remove, and list breakpoints (including conditional breakpoints)
-- Control execution: continue, pause, step into, step over, step out
-- Inspect program state: threads, stack traces, scopes, variables
-- Evaluate expressions in debug context
+- Start, stop, and attach to Python debug sessions
+- Set / remove / list breakpoints (including conditional & logpoints)
+- Control execution: continue, pause, step into/over/out
+- Inspect state: threads, stack traces, scopes, variables
+- Evaluate arbitrary Python expressions in the debug context
 - Set variable values during debugging
 
-## Installation
+## Prerequisites
 
-### Prerequisites
+- VS Code 1.95.0 or later
+- [Python extension for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
+- `debugpy` (`pip install debugpy`)
 
-- VS Code 1.85.0 or later
-- Python extension for VS Code (ms-python.python)
-- debugpy (`pip install debugpy`)
+## Install
 
-### Build from Source
+### From source
 
 ```bash
-cd copilot-debug-vscode
 npm install
 npm run compile
-```
-
-### Install Extension
-
-Press F5 in VS Code to launch the Extension Development Host, or package the extension:
-
-```bash
 npm run package
 code --install-extension copilot-debug-0.1.0.vsix
 ```
 
+Or press F5 in VS Code to launch an Extension Development Host.
+
 ## Usage
 
-### With GitHub Copilot
+Once installed, the debug tools are automatically available in GitHub Copilot Chat. Try:
 
-Once the extension is installed, the debug tools are automatically available in Copilot Chat. You can ask Copilot to:
-
-- "Debug my Python script at /path/to/script.py"
-- "Set a breakpoint at line 42 in main.py"
-- "Show me the current stack trace"
-- "What's the value of the variable `result`?"
-
-### With Claude Code
-
-1. Start the MCP server:
-   - Run command: `Copilot Debug: Start MCP Server`
-
-2. Configure Claude Code to use the MCP server (add to your Claude Code config):
-
-```json
-{
-  "mcpServers": {
-    "copilot-debug": {
-      "command": "code",
-      "args": ["--command", "copilotDebug.startServer"]
-    }
-  }
-}
-```
-
-3. Use debug tools from Claude Code CLI:
-
-```
-> Use the debug_start_session tool to debug my script.py file
-> Set a breakpoint at line 10
-> Step through the code and show me the variables
-```
+- "Debug my Python script at `test.py`"
+- "Set a breakpoint on the line `result = factorial(x)`"
+- "Step into the function and show me the locals"
+- "What is `result` at this point? Is it 120?"
 
 ## Available Tools
 
@@ -119,34 +67,21 @@ Once the extension is installed, the debug tools are automatically available in 
 | `debug_start_session` | Start debugging a Python script |
 | `debug_stop_session` | Stop a debug session |
 | `debug_list_sessions` | List active debug sessions |
-| `debug_attach` | Attach to running debugpy process |
-| `debug_set_breakpoint` | Set a breakpoint |
+| `debug_attach` | Attach to a running debugpy process |
+| `debug_set_breakpoint_by_text` | Set a breakpoint by matching a line's exact text |
 | `debug_remove_breakpoint` | Remove a breakpoint |
 | `debug_list_breakpoints` | List all breakpoints |
-| `debug_continue` | Continue execution |
-| `debug_pause` | Pause execution |
-| `debug_step_into` | Step into function |
-| `debug_step_over` | Step over line |
-| `debug_step_out` | Step out of function |
+| `debug_continue` / `debug_pause` | Continue / pause execution |
+| `debug_step_into` / `debug_step_over` / `debug_step_out` | Stepping |
 | `debug_get_threads` | Get all threads |
-| `debug_get_stack_trace` | Get call stack |
-| `debug_get_scopes` | Get variable scopes |
-| `debug_get_variables` | Get variables in scope |
-| `debug_evaluate` | Evaluate expression |
-| `debug_set_variable` | Set variable value |
-
-## Configuration
-
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `copilotDebug.autoStart` | boolean | `false` | Auto-start MCP server on VS Code launch |
-| `copilotDebug.logLevel` | string | `info` | Log level: debug, info, warn, error |
-| `copilotDebug.serverPort` | number | `0` | MCP server port (0 = auto-assign) |
+| `debug_get_stack_trace` | Get the call stack |
+| `debug_get_scopes` | Get variable scopes for a stack frame |
+| `debug_get_variables` | Get variables in a scope |
+| `debug_evaluate` | Evaluate a Python expression (pass `frameId` to resolve locals) |
+| `debug_set_variable` | Set a variable's value |
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `Copilot Debug: Start MCP Server` | Start the MCP server for Claude Code |
-| `Copilot Debug: Stop MCP Server` | Stop the MCP server |
-| `Copilot Debug: Show Status` | Show server status and available tools |
+| `Copilot Debug: Show Output` | Open the extension's Output Channel |
