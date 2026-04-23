@@ -69,7 +69,7 @@ class DefaultLogger implements Logger {
   };
 
   constructor() {
-    this.outputChannel = vscode.window.createOutputChannel('Copilot Debug');
+    this.outputChannel = vscode.window.createOutputChannel('Copilot Debugger');
   }
 
   setLevel(level: 'debug' | 'info' | 'warn' | 'error') {
@@ -446,18 +446,16 @@ export class DebugBridge {
       }
     }
 
-    // Always try to get exception info - the reason detection might be unreliable
-    // The exceptionInfo request will fail gracefully if there's no exception
-    if (rawEvent.threadId !== undefined) {
+    // Only fetch exception info when the stop was actually caused by an exception.
+    // debugpy can return stale/default exceptionInfo at stopOnEntry, which would
+    // otherwise cause us to mislabel an entry stop as an exception.
+    if (rawEvent.reason === 'exception' && rawEvent.threadId !== undefined) {
       try {
         const exceptionInfo = await session.customRequest('exceptionInfo', {
           threadId: rawEvent.threadId,
         });
 
-        // If we got exception info, there IS an exception
         if (exceptionInfo && (exceptionInfo.exceptionId || exceptionInfo.description)) {
-          // Update reason to exception since we confirmed there is one
-          stopInfo.reason = 'exception';
           stopInfo.exception = {
             type: exceptionInfo.exceptionId ||
                   exceptionInfo.details?.typeName ||
@@ -469,13 +467,17 @@ export class DebugBridge {
                      '',
             stackTrace: exceptionInfo.details?.stackTrace,
           };
+        } else if (rawEvent.description || rawEvent.text) {
+          // Fall back to raw event fields if exceptionInfo was empty
+          stopInfo.exception = {
+            type: rawEvent.description || 'Exception',
+            message: rawEvent.text || '',
+          };
         }
       } catch (error) {
-        // No exception or request not supported - this is expected for non-exception stops
-        this.logger.debug('No exception info available (expected for non-exception stops)', error);
+        this.logger.debug('Failed to fetch exceptionInfo for exception stop', error);
 
-        // If raw event indicated exception, try to use its description/text
-        if (rawEvent.reason === 'exception' && (rawEvent.description || rawEvent.text)) {
+        if (rawEvent.description || rawEvent.text) {
           stopInfo.exception = {
             type: rawEvent.description || 'Exception',
             message: rawEvent.text || '',

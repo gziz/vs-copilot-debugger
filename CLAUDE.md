@@ -1,4 +1,4 @@
-# Copilot Debug - VS Code Extension
+# Copilot Debugger - VS Code Extension
 
 VS Code extension that exposes Python debug state to **GitHub Copilot Chat** via VS Code's Language Model Tools API (`vscode.lm.registerTool`).
 
@@ -82,12 +82,12 @@ GitHub Copilot Chat  ──(vscode.lm API)──▶  Extension  ──▶  Debug
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `copilotDebug.logLevel` | string | `"info"` | Log level: `debug`, `info`, `warn`, `error` |
-| `copilotDebug.enableLogging` | boolean | `false` | Mirror logs to `${workspaceFolder}/.vscode/copilot-debug.log` |
+| `copilotDebugger.logLevel` | string | `"info"` | Log level: `debug`, `info`, `warn`, `error` |
+| `copilotDebugger.enableLogging` | boolean | `false` | Mirror logs to `${workspaceFolder}/.vscode/copilot-debugger.log` |
 
 ## VS Code commands
 
-- `Copilot Debug: Show Output` — open the Output Channel
+- `Copilot Debugger: Show Output` — open the Output Channel
 
 ## Conventions
 

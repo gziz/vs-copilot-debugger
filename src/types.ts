@@ -1,5 +1,5 @@
 /**
- * Shared type definitions for Copilot Debug extension
+ * Shared type definitions for Copilot Debugger extension
  */
 
 /**

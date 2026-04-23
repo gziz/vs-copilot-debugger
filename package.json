@@ -1,10 +1,15 @@
 {
-  "name": "copilot-debug",
-  "displayName": "Copilot Debug",
+  "name": "copilot-debugger",
+  "displayName": "Copilot Debugger",
   "description": "Exposes Python debug state to AI coding agents (Copilot, Claude Code) via debug tools",
   "version": "0.1.0",
+  "license": "Unlicense",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gziz/vs-copilot-debugger.git"
+  },
   "icon": "images/debugger_icon.png",
-  "publisher": "copilot-debug",
+  "publisher": "gziz",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -23,7 +28,7 @@
         "name": "debug_start_session",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "startDebug",
         "displayName": "Start Debug Session",
@@ -74,7 +79,7 @@
         "name": "debug_stop_session",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "stopDebug",
         "displayName": "Stop Debug Session",
@@ -98,7 +103,7 @@
         "name": "debug_list_sessions",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "listDebugSessions",
         "displayName": "List Debug Sessions",
@@ -114,7 +119,7 @@
         "name": "debug_attach",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "attachDebug",
         "displayName": "Attach to Debug Session",
@@ -146,7 +151,7 @@
         "name": "debug_set_breakpoint_by_text",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "setBreakpointByText",
         "displayName": "Set Breakpoint by Text",
@@ -191,7 +196,7 @@
         "name": "debug_remove_breakpoint",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "removeBreakpoint",
         "displayName": "Remove Breakpoint",
@@ -215,7 +220,7 @@
         "name": "debug_list_breakpoints",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "listBreakpoints",
         "displayName": "List Breakpoints",
@@ -231,7 +236,7 @@
         "name": "debug_continue",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "continueDebug",
         "displayName": "Continue Execution",
@@ -259,7 +264,7 @@
         "name": "debug_pause",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "pauseDebug",
         "displayName": "Pause Execution",
@@ -287,7 +292,7 @@
         "name": "debug_step_into",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "stepInto",
         "displayName": "Step Into",
@@ -315,7 +320,7 @@
         "name": "debug_step_over",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "stepOver",
         "displayName": "Step Over",
@@ -343,7 +348,7 @@
         "name": "debug_step_out",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "stepOut",
         "displayName": "Step Out",
@@ -371,7 +376,7 @@
         "name": "debug_get_threads",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "getThreads",
         "displayName": "Get Threads",
@@ -395,7 +400,7 @@
         "name": "debug_get_stack_trace",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "getStackTrace",
         "displayName": "Get Stack Trace",
@@ -431,7 +436,7 @@
         "name": "debug_get_scopes",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "getScopes",
         "displayName": "Get Scopes",
@@ -460,7 +465,7 @@
         "name": "debug_get_variables",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "getVariables",
         "displayName": "Get Variables",
@@ -505,7 +510,7 @@
         "name": "debug_evaluate",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "evaluate",
         "displayName": "Evaluate Expression",
@@ -548,7 +553,7 @@
         "name": "debug_set_variable",
         "tags": [
           "debugging",
-          "copilot-debug"
+          "copilot-debugger"
         ],
         "toolReferenceName": "setVariable",
         "displayName": "Set Variable",
@@ -586,14 +591,14 @@
     ],
     "commands": [
       {
-        "command": "copilotDebug.showOutput",
-        "title": "Copilot Debug: Show Output"
+        "command": "copilotDebugger.showOutput",
+        "title": "Copilot Debugger: Show Output"
       }
     ],
     "configuration": {
-      "title": "Copilot Debug",
+      "title": "Copilot Debugger",
       "properties": {
-        "copilotDebug.logLevel": {
+        "copilotDebugger.logLevel": {
           "type": "string",
           "enum": [
             "debug",
@@ -602,12 +607,12 @@
             "error"
           ],
           "default": "info",
-          "description": "Log level for Copilot Debug extension"
+          "description": "Log level for Copilot Debugger extension"
         },
-        "copilotDebug.enableLogging": {
+        "copilotDebugger.enableLogging": {
           "type": "boolean",
           "default": false,
-          "description": "Enable file-based debug logging to .vscode/copilot-debug.log in the workspace"
+          "description": "Enable file-based debug logging to .vscode/copilot-debugger.log in the workspace"
         }
       }
     }

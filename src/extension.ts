@@ -1,5 +1,5 @@
 /**
- * Copilot Debug Extension Entry Point
+ * Copilot Debugger Extension Entry Point
  *
  * Exposes Python debug state to GitHub Copilot Chat via VS Code's
  * Language Model Tools API (vscode.lm.registerTool).
@@ -14,7 +14,7 @@ import { ExtensionConfig } from './types';
 let debugBridge: DebugBridge | undefined;
 
 function getConfig(): ExtensionConfig {
-  const config = vscode.workspace.getConfiguration('copilotDebug');
+  const config = vscode.workspace.getConfiguration('copilotDebugger');
   return {
     logLevel: config.get('logLevel', 'info') as ExtensionConfig['logLevel'],
     enableLogging: config.get('enableLogging', false),
@@ -22,7 +22,7 @@ function getConfig(): ExtensionConfig {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  console.log('Copilot Debug extension activating...');
+  console.log('Copilot Debugger extension activating...');
 
   debugBridge = new DebugBridge();
   context.subscriptions.push({
@@ -35,7 +35,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (config.enableLogging) {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (workspaceFolder) {
-      const logPath = path.join(workspaceFolder, '.vscode', 'copilot-debug.log');
+      const logPath = path.join(workspaceFolder, '.vscode', 'copilot-debugger.log');
       debugBridge.setFileOutput(logPath);
     }
   }
@@ -47,32 +47,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('copilotDebug.showOutput', () => {
+    vscode.commands.registerCommand('copilotDebugger.showOutput', () => {
       debugBridge?.showOutput();
     })
   );
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('copilotDebug')) {
+      if (event.affectsConfiguration('copilotDebugger')) {
         const newConfig = getConfig();
         debugBridge?.setLogLevel(newConfig.logLevel);
       }
     })
   );
 
-  console.log('Copilot Debug extension activated');
+  console.log('Copilot Debugger extension activated');
 }
 
 export function deactivate(): void {
-  console.log('Copilot Debug extension deactivating...');
+  console.log('Copilot Debugger extension deactivating...');
 
   if (debugBridge) {
     debugBridge.dispose();
     debugBridge = undefined;
   }
 
-  console.log('Copilot Debug extension deactivated');
+  console.log('Copilot Debugger extension deactivated');
 }
 
 export function getDebugBridge(): DebugBridge | undefined {

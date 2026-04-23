@@ -46,7 +46,7 @@ GitHub Copilot Chat  ──(vscode.lm API)──▶  Extension  ──▶  Debug
 npm install
 npm run compile
 npm run package
-code --install-extension copilot-debug-0.1.0.vsix
+code --install-extension copilot-debugger-0.1.0.vsix
 ```
 
 Or press F5 in VS Code to launch an Extension Development Host.
@@ -84,4 +84,4 @@ Once installed, the debug tools are automatically available in GitHub Copilot Ch
 
 | Command | Description |
 |---------|-------------|
-| `Copilot Debug: Show Output` | Open the extension's Output Channel |
+| `Copilot Debugger: Show Output` | Open the extension's Output Channel |

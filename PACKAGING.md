@@ -3,7 +3,7 @@
 ## Quick Command (One-liner)
 
 ```bash
-cd /home/azureuser/localfiles/repos/claudebugger/copilot-debug && npm install @vscode/vsce --save-dev && ./node_modules/.bin/vsce package --allow-missing-repository
+cd /home/azureuser/localfiles/repos/claudebugger/copilot-debugger && npm install @vscode/vsce --save-dev && ./node_modules/.bin/vsce package --allow-missing-repository
 ```
 
 ## Step-by-Step
@@ -22,7 +22,7 @@ npm install @vscode/vsce --save-dev
 
 This will:
 - Run the `vscode:prepublish` script (which compiles TypeScript)
-- Create a `.vsix` file (e.g., `copilot-debug-0.1.0.vsix`)
+- Create a `.vsix` file (e.g., `copilot-debugger-0.1.0.vsix`)
 
 ### 3. Install the Extension
 
@@ -33,7 +33,7 @@ This will:
 
 **Option B - Terminal:**
 ```bash
-code --install-extension copilot-debug-0.1.0.vsix
+code --install-extension copilot-debugger-0.1.0.vsix
 ```
 
 ## Notes
